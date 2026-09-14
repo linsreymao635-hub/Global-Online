@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
@@ -115,16 +117,69 @@ class ForgotPasswordPage extends StatefulWidget {
 }
 
 class _ForgotPassword extends State<ForgotPasswordPage> {
-  final email = TextEditingController();
+  int step = 1;
+  String code = '';
+  final phone = TextEditingController();
+  final codeInput = TextEditingController();
+  final npass = TextEditingController();
+  final cpass = TextEditingController();
   bool busy = false;
+  bool show = false;
 
   void msg(String x) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(x)));
 
-  Future<void> submit() async {
+  String rnd() => (100000 + Random().nextInt(900000)).toString();
+
+  void sendCode() async {
     final tr = AppLocalizations.of(context).t;
-    if (!email.text.trim().contains('@')) {
-      msg(tr('Please enter your email'));
+    if (phone.text.trim().length < 8) {
+      msg(tr('Please enter a valid phone number'));
+      return;
+    }
+    setState(() {
+      busy = true;
+      code = rnd();
+    });
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() => busy = false);
+    await showDialog<void>(
+      context: context,
+      builder: (dc) => AlertDialog(
+        icon: const Icon(Icons.sms_outlined, size: 40, color: Colors.green),
+        title: Text(tr('Verification code')),
+        content: Text('${tr('We sent a code to')} ${phone.text.trim()}\n\n$code'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dc);
+              setState(() => step = 2);
+            },
+            child: Text(tr('Continue')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void verifyCode() {
+    final tr = AppLocalizations.of(context).t;
+    if (codeInput.text.trim() != code) {
+      msg(tr('Wrong code. Check your phone.'));
+      return;
+    }
+    setState(() => step = 3);
+  }
+
+  void resetPassword() async {
+    final tr = AppLocalizations.of(context).t;
+    if (npass.text.length < 6) {
+      msg(tr('Password must be at least 6 characters'));
+      return;
+    }
+    if (npass.text != cpass.text) {
+      msg(tr('Passwords do not match'));
       return;
     }
     setState(() => busy = true);
@@ -134,9 +189,8 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     await showDialog<void>(
       context: context,
       builder: (dc) => AlertDialog(
-        icon: const Icon(Icons.mail_outline, size: 40),
-        title: Text(tr('Check your email')),
-        content: Text(tr('If your email is registered, a reset link was sent to it.')),
+        icon: const Icon(Icons.check_circle_outline, size: 40, color: Colors.green),
+        title: Text(tr('Password reset successful')),
         actions: [
           TextButton(
             onPressed: () {
@@ -150,51 +204,139 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     );
   }
 
+  Widget field(TextEditingController c, String t, IconData icon,
+      {bool obscure = false, bool code_ = false}) =>
+      TextField(
+        controller: c,
+        obscureText: obscure,
+        keyboardType: code_
+            ? TextInputType.number
+            : obscure
+                ? TextInputType.visiblePassword
+                : TextInputType.phone,
+        maxLength: code_ ? 6 : null,
+        style: const TextStyle(fontSize: 16),
+        decoration: InputDecoration(
+          labelText: t,
+          prefixIcon: Icon(icon),
+          filled: true,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
+        ),
+      );
+
   @override
   void dispose() {
-    email.dispose();
+    phone.dispose();
+    codeInput.dispose();
+    npass.dispose();
+    cpass.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Forgot Password'))),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Center(child: Icon(Icons.lock_reset, size: 70)),
-          const SizedBox(height: 16),
-          Text(
-            tr('Enter your email to receive a password reset link'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              labelText: tr('Email'),
-              prefixIcon: const Icon(Icons.mail_outline),
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: busy ? null : submit,
+    final sch = Theme.of(c).colorScheme;
+    IconData icon = Icons.lock_reset;
+    String title = '';
+    Widget body = const SizedBox();
+    switch (step) {
+      case 1:
+        icon = Icons.sms_outlined;
+        title = tr('Enter your phone number to receive a verification code');
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 20),
+            field(phone, tr('Phone'), Icons.phone_android),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: busy ? null : sendCode,
               icon: busy
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.send),
-              label: Text(tr('Send reset link')),
+              label: Text(tr('Send code')),
+            ),
+          ],
+        );
+      case 2:
+        icon = Icons.pin_outlined;
+        title = '${tr('We sent a code to')} ${phone.text.trim()}';
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 20),
+            field(codeInput, tr('Verification code'), Icons.password,
+                code_: true),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: verifyCode,
+              child: Text(tr('Verify code')),
+            ),
+          ],
+        );
+      case 3:
+        icon = Icons.lock_reset;
+        title = tr('Reset password');
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 20),
+            field(npass, tr('New Password'), Icons.lock_outline,
+                obscure: !show),
+            const SizedBox(height: 14),
+            field(cpass, tr('Confirm password'), Icons.lock_outline,
+                obscure: !show),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: Icon(show ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => show = !show),
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: busy ? null : resetPassword,
+              icon: busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.check),
+              label: Text(tr('Reset password')),
+            ),
+          ],
+        );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(tr('Forgot Password'))),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Center(
+            child: Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: sch.primaryContainer,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(icon, size: 46, color: sch.onPrimaryContainer),
             ),
           ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          body,
         ],
       ),
     );
@@ -211,8 +353,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _Login extends State<LoginPage> {
-  final u = TextEditingController(text: 'emilys');
-  final p = TextEditingController(text: 'emilyspass');
+  final u = TextEditingController();
+  final p = TextEditingController();
   bool busy = false;
   bool show = false;
 
@@ -235,79 +377,140 @@ class _Login extends State<LoginPage> {
     }
   }
 
+  Widget field(TextEditingController c, String t, IconData icon) => TextField(
+        controller: c,
+        style: const TextStyle(fontSize: 16),
+        decoration: InputDecoration(
+          labelText: t,
+          prefixIcon: Icon(icon),
+          filled: true,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        ),
+      );
+
   @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
     return Scaffold(
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const Icon(Icons.shopping_bag, size: 80),
-                const Text('Globle Online',
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 25),
-                TextField(
-                    controller: u,
-                    decoration: InputDecoration(
-                        labelText: tr('Username'), border: const OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: p,
-                    obscureText: !show,
-                    decoration: InputDecoration(
-                        labelText: tr('Password'),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(show
-                              ? Icons.visibility_off
-                              : Icons.visibility),
-                          onPressed: () => setState(() => show = !show),
-                        ))),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.push(
-                        c,
-                        MaterialPageRoute(
-                            builder: (_) => const ForgotPasswordPage())),
-                    child: Text(tr('Forgot Password?')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+              Center(
+                child: Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        colors: [sch.primary, sch.tertiary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: const Icon(Icons.shopping_bag,
+                      size: 52, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Globle Online',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 30, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(tr('Sign in to continue shopping'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 14, color: sch.onSurfaceVariant)),
+              const SizedBox(height: 32),
+              field(u, tr('Username'), Icons.person_outline),
+              const SizedBox(height: 14),
+              TextField(
+                controller: p,
+                obscureText: !show,
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
+                  labelText: tr('Password'),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none),
+                  suffixIcon: IconButton(
+                    icon: Icon(show ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => show = !show),
                   ),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: busy ? null : go,
-                    child: busy
-                        ? const CircularProgressIndicator()
-                        : Text(tr('Sign In')),
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.push(
+                      c,
+                      MaterialPageRoute(
+                          builder: (_) => const ForgotPasswordPage())),
+                  child: Text(tr('Forgot Password?')),
                 ),
-                TextButton(
-                    onPressed: widget.signup, child: Text(tr('Create Account'))),
-                const SizedBox(height: 12),
-                Row(
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 52,
+                child: FilledButton(
+                  onPressed: busy ? null : go,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2.5, color: Colors.white))
+                      : Text(tr('Sign In')),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: widget.signup,
+                child: Text.rich(TextSpan(
+                  text: '${tr('New to Globle Online?')} ',
                   children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(tr('Or continue with')),
+                    TextSpan(
+                      text: tr('Create Account'),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, color: sch.primary),
                     ),
-                    const Expanded(child: Divider()),
                   ],
-                ),
-                const SizedBox(height: 16),
-                socialButtons(c, widget.success, tr),
-                const SizedBox(height: 12),
-                const Text('Demo: emilys / emilyspass'),
-              ],
-            ),
+                )),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(tr('Or continue with'),
+                        style: TextStyle(color: sch.onSurfaceVariant)),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 20),
+              socialButtons(c, widget.success, tr),
+              const SizedBox(height: 12),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -322,7 +525,6 @@ class SignupPage extends StatefulWidget {
 class _Signup extends State<SignupPage> {
   final f = TextEditingController();
   final l = TextEditingController();
-  final u = TextEditingController();
   final e = TextEditingController();
   final p = TextEditingController();
   final cp = TextEditingController();
@@ -333,9 +535,13 @@ class _Signup extends State<SignupPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(x)));
 
   Future<void> go() async {
+    final uname = (f.text.trim() + l.text.trim())
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
     setState(() => busy = true);
     try {
-      final x = await widget.p.signup(f: f.text, l: l.text, u: u.text, p: p.text, c: cp.text, e: e.text);
+      final x = await widget.p.signup(
+          f: f.text, l: l.text, u: uname, p: p.text, c: cp.text, e: e.text);
       if (x == null) {
         msg(AppLocalizations.of(context).t('Could not create account'));
       } else {
@@ -348,18 +554,20 @@ class _Signup extends State<SignupPage> {
     }
   }
 
-  Widget field(TextEditingController c, String t,
+  Widget field(TextEditingController c, String t, IconData icon,
           {bool s = false, Widget? trailing}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: TextField(
-            controller: c,
-            obscureText: s,
-            decoration: InputDecoration(
-                labelText: t,
-                border: const OutlineInputBorder(),
-                suffixIcon: trailing)),
-      );
+      TextField(
+          controller: c,
+          obscureText: s,
+          style: const TextStyle(fontSize: 16),
+          decoration: InputDecoration(
+              labelText: t,
+              prefixIcon: Icon(icon),
+              filled: true,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none),
+              suffixIcon: trailing));
 
   Widget eye() => IconButton(
         icon: Icon(show ? Icons.visibility_off : Icons.visibility),
@@ -369,35 +577,89 @@ class _Signup extends State<SignupPage> {
   @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
     return Scaffold(
-        appBar: AppBar(title: Text(tr('Sign Up'))),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
+      appBar: AppBar(title: Text(tr('Sign Up'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           children: [
-            field(f, tr('First name')),
-            field(l, tr('Last name')),
-            field(u, tr('Username')),
-            field(e, tr('Email')),
-            field(p, tr('Password'), s: !show, trailing: eye()),
-            field(cp, tr('Confirm password'), s: !show, trailing: eye()),
-            FilledButton(onPressed: busy ? null : go, child: Text(tr('Create Account'))),
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [sch.primary, sch.tertiary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: const Icon(Icons.person_add_alt_1,
+                    size: 48, color: Colors.white),
+              ),
+            ),
             const SizedBox(height: 16),
+            Text(tr('Create your account'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(tr('Join Globle Online and start shopping'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+            const SizedBox(height: 24),
+            field(f, tr('First name'), Icons.person_outline),
+            const SizedBox(height: 12),
+            field(l, tr('Last name'), Icons.person_outline),
+            const SizedBox(height: 12),
+            field(e, tr('Phone'), Icons.phone_android),
+            const SizedBox(height: 12),
+            field(p, tr('Password'), Icons.lock_outline,
+                s: !show, trailing: eye()),
+            const SizedBox(height: 12),
+            field(cp, tr('Confirm password'), Icons.lock_outline,
+                s: !show, trailing: eye()),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 52,
+              child: FilledButton(
+                onPressed: busy ? null : go,
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                child: busy
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                    : Text(tr('Create Account')),
+              ),
+            ),
+            const SizedBox(height: 18),
             Row(
               children: [
                 const Expanded(child: Divider()),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(tr('Or continue with')),
+                  child: Text(tr('Or continue with'),
+                      style: TextStyle(color: sch.onSurfaceVariant)),
                 ),
                 const Expanded(child: Divider()),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             socialButtons(c, widget.success, tr),
             const SizedBox(height: 12),
           ],
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -1073,15 +1335,18 @@ class _Address extends State<AddressPage> {
       TextEditingController(text: widget.initial?.city ?? 'Phnom Penh');
   late final TextEditingController country =
       TextEditingController(text: widget.initial?.country ?? 'Cambodia');
-  final Set<Marker> _markers = {};
   late LatLng _pos;
+  MapController? _ctrl;
 
   @override
   void initState() {
     super.initState();
     _pos = LatLng(
         widget.initial?.latitude ?? 11.5564, widget.initial?.longitude ?? 104.9282);
-    _markers.add(Marker(markerId: const MarkerId('pin'), position: _pos));
+  }
+
+  void _setPin(LatLng p) {
+    setState(() => _pos = p);
   }
 
   Widget f(TextEditingController c, String t, IconData icon) => Padding(
@@ -1117,13 +1382,17 @@ class _Address extends State<AddressPage> {
     } catch (_) {}
   }
 
-  void _onTapMap(LatLng p) {
-    _markers
-      ..clear()
-      ..add(Marker(markerId: const MarkerId('pin'), position: p));
-    _pos = p;
+  void _onTapMap(TapPosition tp, LatLng p) {
+    _setPin(p);
     _reverseGeocode(p.latitude, p.longitude);
-    setState(() {});
+  }
+
+  void _useMapCenter() {
+    final ctrl = _ctrl;
+    if (ctrl == null) return;
+    final c = ctrl.camera.center;
+    _setPin(c);
+    _reverseGeocode(c.latitude, c.longitude);
   }
 
   void go() {
@@ -1159,18 +1428,34 @@ class _Address extends State<AddressPage> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              height: 220,
-              child: GoogleMap(
-                initialCameraPosition:
-                    CameraPosition(target: _pos, zoom: 14),
-                markers: _markers,
-                onTap: _onTapMap,
-                myLocationEnabled: false,
-                zoomControlsEnabled: false,
-                compassEnabled: false,
-                mapToolbarEnabled: false,
-                rotateGesturesEnabled: false,
-                tiltGesturesEnabled: false,
+              height: 250,
+              child: FlutterMap(
+                mapController: _ctrl,
+                options: MapOptions(
+                  initialCenter: _pos,
+                  initialZoom: 15,
+                  onTap: _onTapMap,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.online_shop_mvp_full',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _pos,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(Icons.location_pin,
+                            size: 44, color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -1178,6 +1463,15 @@ class _Address extends State<AddressPage> {
             padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
             child: Text(tr('Tap the map to select your delivery location'),
                 style: TextStyle(color: sch.onSurfaceVariant, fontSize: 12)),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: _useMapCenter,
+              icon: const Icon(Icons.center_focus_strong, size: 18),
+              label: Text(tr('Use map center')),
+            ),
           ),
           const SizedBox(height: 14),
           Text(tr('Contact information'),
@@ -1598,6 +1892,7 @@ class ProfilePage extends StatefulWidget {
 
 class _Profile extends State<ProfilePage> {
   late User user;
+  bool _imgFailed = false;
 
   @override
   void initState() {
@@ -1613,6 +1908,7 @@ class _Profile extends State<ProfilePage> {
             email: saved.email,
             image: saved.image ?? widget.user.image,
             token: widget.user.token);
+    _imgFailed = false;
   }
 
   Future<void> _edit() async {
@@ -1719,46 +2015,163 @@ class _Profile extends State<ProfilePage> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [sch.primary, sch.primaryContainer],
+                colors: [sch.primary, sch.tertiary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius:
                   const BorderRadius.vertical(bottom: Radius.circular(28)),
             ),
-            child: Column(
+            child: Stack(
               children: [
-                CircleAvatar(
-                  radius: 46,
-                  backgroundColor: Colors.white,
-                  backgroundImage: userImage(user.image),
-                  child: user.image == null
-                      ? Icon(Icons.person, size: 54, color: sch.primary)
-                      : null,
+                Positioned(
+                  right: -40,
+                  top: -30,
+                  child: Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Text(user.fullName,
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: sch.onPrimary),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 4),
-                Text('@${user.username}',
-                    style: TextStyle(
-                        fontSize: 14, color: sch.onPrimaryContainer),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 2),
-                Text(user.email,
-                    style: TextStyle(
-                        fontSize: 13, color: sch.onSurfaceVariant),
-                    textAlign: TextAlign.center),
-              ],
-            ),
-          ),
+                Positioned(
+                  left: -30,
+                  bottom: -50,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 112,
+                      height: 112,
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                  colors: [Colors.white, Colors.white70],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.25),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6)),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              radius: 52,
+                              backgroundColor: Colors.white,
+                              backgroundImage: user.image == null || _imgFailed
+                                  ? null
+                                  : userImage(user.image),
+                              onBackgroundImageError: user.image == null
+                                  ? null
+                                  : (_, __) => setState(() => _imgFailed = true),
+                              child: _imgFailed
+                                  ? Icon(Icons.person, size: 60, color: sch.primary)
+                                  : user.image == null
+                                      ? Icon(Icons.person, size: 60, color: sch.primary)
+                                      : null,
+                            ),
+                          ),
+                          Positioned(
+                            right: 2,
+                            bottom: 2,
+                            child: GestureDetector(
+                              onTap: _edit,
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: sch.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: Icon(Icons.photo_camera,
+                                    size: 16, color: sch.onPrimary),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(user.fullName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2)),
+                                ],
+                              )),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text('@${user.username}',
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white)),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.email_outlined,
+                                    size: 15, color: Colors.white),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(user.email,
+                                      style: const TextStyle(
+                                          fontSize: 13, color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+          ],
+        ),
+      ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
             child: Column(

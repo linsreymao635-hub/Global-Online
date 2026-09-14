@@ -104,8 +104,22 @@ class AppLocalizations {
     'Add your address below': 'បន្ថែមអាសយដ្ឋានរបស់អ្នកខាងក្រោម',
     'Tap the map to select your delivery location':
         'ចុចលើផែនទីដើម្បីជ្រើសរើសទីតាំងដឹកជញ្ជូនរបស់អ្នក',
+    'Use map center': 'ប្រើកណ្តាលផែនទី',
     'Full name': 'ឈ្មោះពេញ',
     'Phone': 'ទូរស័ព្ទ',
+    'Enter your phone number to receive a verification code':
+        'បញ្ចូលលេខទូរស័ព្ទរបស់អ្នកដើម្បីទទួលកូដផ្ទៀងផ្ទាត់',
+    'Send code': 'ផ្ញើកូដ',
+    'Verification code': 'កូដផ្ទៀងផ្ទាត់',
+    'We sent a code to': 'យើងបានផ្ញើកូដទៅ',
+    'Verify code': 'ផ្ទៀងផ្ទាត់កូដ',
+    'Please enter a valid phone number':
+        'សូមបញ្ចូលលេខទូរស័ព្ទត្រឹមត្រូវ',
+    'Wrong code. Check your phone.': 'កូដមិនត្រឹមត្រូវ។ សូមពិនិត្យមើលទូរស័ព្ទរបស់អ្នក',
+    'Reset password': 'កំណត់ពាក្យសម្ងាត់ថ្មី',
+    'Password reset successful': 'បានកំណត់ពាក្យសម្ងាត់ថ្មីដោយជោគជ័យ',
+    'Password must be at least 6 characters':
+        'ពាក្យសម្ងាត់ត្រូវតែយ៉ាងហោចណាស់ 6 តួអក្សរ',
     'Address': 'អាសយដ្ឋាន',
     'City': 'ទីក្រុង',
     'Country': 'ប្រទេស',
@@ -120,6 +134,8 @@ class AppLocalizations {
     '2 Columns': 'ពីរជួរ',
     'Sort': 'តម្រៀប',
     'No favorites': 'គ្មានចំណូលចិត្ត',
+    'Sign in to continue shopping': 'ចូលដើម្បីបន្តការទិញទំនិញ',
+    'New to Globle Online?': 'ថ្មីសម្រាប់ Globle Online?',
     'Name': 'ឈ្មោះ',
     'Language': 'ភាសា',
     'English': 'អង់គ្លេស',
