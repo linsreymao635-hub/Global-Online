@@ -1,0 +1,3 @@
+import 'package:flutter_test/flutter_test.dart'; import 'package:online_shop_mvp_full/presenters/presenters.dart'; import 'package:online_shop_mvp_full/repositories/repositories.dart'; import 'package:online_shop_mvp_full/models/models.dart'; import 'package:online_shop_mvp_full/services/api_service.dart';
+class FakeAuth extends AuthRepository{FakeAuth():super(ApiService());@override Future<User?> login(String u,String p)async=>User(id:1,firstName:'Test',lastName:'User',username:u,email:'test@test.com');}
+void main(){test('empty login throws',()async{final p=LoginPresenter(FakeAuth());expect(()=>p.login('','x'),throwsException);});test('login returns user',()async{final u=await LoginPresenter(FakeAuth()).login('test','password');expect(u?.username,'test');});}

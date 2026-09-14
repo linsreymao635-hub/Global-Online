@@ -1,0 +1,2 @@
+import 'package:flutter_test/flutter_test.dart'; import 'package:online_shop_mvp_full/models/models.dart'; import 'package:online_shop_mvp_full/presenters/presenters.dart';
+void main(){final p=Product(id:1,title:'Test',price:10,discountPercentage:0,rating:5,stock:5,brand:'',category:'',description:'',thumbnail:'',images:[]);test('cart quantity and total',(){final c=CartPresenter();c.add(p);c.add(p);expect(c.count,2);expect(c.total,20);});test('minus removes last item',(){final c=CartPresenter();c.add(p);c.minus(p);expect(c.items,isEmpty);});}
