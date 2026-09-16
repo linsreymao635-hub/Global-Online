@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import 'app_settings.dart';
 
 class ApiService {
   static const baseUrl = 'https://dummyjson.com';
@@ -57,6 +58,24 @@ class ApiService {
   }
 
   Future<User?> login(String u, String p) async {
+    // Locally stored accounts (Sign Up / password reset) take priority:
+    // the demo API cannot persist passwords, so the device is the source
+    // of truth for those accounts.
+    final local = AppSettings.localAuth[u.trim().toLowerCase()];
+    if (local != null) {
+      if (local['password'] == p) {
+        return User(
+            id: (local['id'] as num?)?.toInt() ?? 0,
+            firstName: local['firstName'] as String? ?? '',
+            lastName: local['lastName'] as String? ?? '',
+            username: u.trim(),
+            email: local['email'] as String? ?? '',
+            image: local['image'] as String?,
+            token: local['token'] as String?);
+      }
+      // Password was changed on this device: the old one is no longer valid.
+      return null;
+    }
     final r = await http.post(Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': u, 'password': p}));

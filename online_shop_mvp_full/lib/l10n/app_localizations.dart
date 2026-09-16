@@ -41,6 +41,7 @@ class AppLocalizations {
     'Password': 'ពាក្យសម្ងាត់',
     'Sign In': 'ចូល',
     'Create Account': 'បង្កើតគណនី',
+    'Continue as guest': 'បន្តជាភ្ញៀវ',
     'Login failed': 'ការចូលបរាជ័យ',
     'Sign Up': 'ចុះឈ្មោះ',
     'Forgot Password?': 'ភ្លេចពាក្យសម្ងាត់?',
@@ -48,6 +49,103 @@ class AppLocalizations {
     'Or continue with': 'ឬបន្តជាមួយ',
     'Continue with Google': 'បន្តជាមួយ Google',
     'Continue with Telegram': 'បន្តជាមួយ Telegram',
+    'Google sign-in failed': 'ការចូលតាម Google បរាជ័យ',
+    'Google sign-in is not configured yet':
+        'ការចូលតាម Google មិនទាន់ត្រូវបានកំណត់រចនាសម្ព័ន្ធនៅឡើយទេ',
+    'Add your Google Cloud OAuth client ID in Settings → Google Sign-In, or add android/app/google-services.json':
+        'បន្ថែម OAuth Client ID របស់ Google Cloud នៅក្នុង ការកំណត់ → ការចូលតាម Google ឬបន្ថែម android/app/google-services.json',
+    'Google Sign-In': 'ការចូលតាម Google',
+    'Configured': 'បានកំណត់',
+    'Not configured': 'មិនទាន់កំណត់',
+    'Google Client ID': 'Google Client ID',
+    'Paste your Google Cloud OAuth Web client ID here (ends with .apps.googleusercontent.com)':
+        'បិទភ្ជាប់ OAuth Web Client ID របស់ Google Cloud នៅទីនេះ (បញ្ចប់ដោយ .apps.googleusercontent.com)',
+    'Google client ID saved': 'Google Client ID ត្រូវបានរក្សាទុក',
+    'Please enter your client ID': 'សូមបញ្ចូល Client ID របស់អ្នក',
+    'Web client ID': 'Web Client ID',
+    'Android client ID': 'Android Client ID',
+    'Android client ID (optional)': 'Android Client ID (ស្រេចចិត្ត)',
+    'Needed on Android so sign-in completes after you pick your Google account':
+        'ត្រូវការនៅលើ Android ដើម្បីឱ្យការចូលបានបញ្ចប់ បន្ទាប់ពីអ្នកជ្រើសរើសគណនី Google របស់អ្នក',
+    'Google account was not accepted':
+        'គណនី Google របស់អ្នកមិនត្រូវបានទទួលយកទេ',
+    'Your selected Google account cannot finish signing in yet. '
+        'Add the Android client ID for this app (package com.example.online_shop_mvp_full and its SHA-1) in Google Cloud Console → Credentials → OAuth client ID → Android, then paste it here so this phone can complete Google sign-in.':
+        'គណនី Google ដែលអ្នកបានជ្រើសរើស មិនអាចបញ្ចប់ការចូលនៅឡើយទេ។ '
+        'សូមបន្ថែម Android client ID សម្រាប់កម្មវិធីនេះ (package com.example.online_shop_mvp_full និង SHA-1 របស់វា) នៅក្នុង Google Cloud Console → Credentials → OAuth client ID → Android រួចបិទភ្ជាប់នៅទីនេះ ដើម្បីឱ្យទូរស័ព្ទនេះអាចបញ្ចប់ការចូលតាម Google។',
+    'Enter client IDs': 'បញ្ចូល Client ID',
+    'Telegram login is not configured yet': 'ការចូលតាម Telegram មិនទាន់ត្រូវបានកំណត់រចនាសម្ព័ន្ធនៅឡើយទេ',
+    'Create a Telegram bot and set its username in TelegramAuthService':
+        'បង្កើត bot របស់ Telegram ហើយកំណត់ឈ្មោះអ្នកប្រើរបស់វានៅក្នុង TelegramAuthService',
+    'Telegram sign-in failed': 'ការចូលតាម Telegram បរាជ័យ',
+    'Telegram login could not load': 'មិនអាចផ្ទុកការចូលតាម Telegram បានទេ',
+    'Check your internet connection and try again.':
+        'សូមពិនិត្យការភ្ជាប់អ៊ីនធឺណិតរបស់អ្នក ហើយព្យាយាមម្តងទៀត។',
+    'Telegram Sign-In': 'ការចូលតាម Telegram',
+    'Telegram bot username': 'ឈ្មោះ bot របស់ Telegram',
+    'Telegram bot username looks wrong': 'ឈ្មោះ bot របស់ Telegram មើលទៅខុស',
+    'Telegram bot usernames must end with "bot", for example my_shop_bot. '
+        'Create a bot in @BotFather, then paste its username.':
+        'ឈ្មោះ bot របស់ Telegram ត្រូវតែបញ្ចប់ដោយ "bot" ឧទាហរណ៍ my_shop_bot ។ '
+        'បង្កើត bot នៅក្នុង @BotFather បន្ទាប់មកបិទភ្ជាប់ឈ្មោះរបស់វា។',
+    'Paste your Telegram bot username (without @). '
+        'Create the bot in @BotFather first — it always ends with "bot", e.g. my_shop_bot.':
+        'បិទភ្ជាប់ឈ្មោះ bot របស់អ្នក (ដោយគ្មាន @) ។ '
+        'បង្កើត bot នៅក្នុង @BotFather ជាមុនសិន — វាតែងតែបញ្ចប់ដោយ "bot" ឧទាហរណ៍ my_shop_bot។',
+    'Must end with "bot"': 'ត្រូវតែបញ្ចប់ដោយ "bot"',
+    'Needs a bot ending with "bot"': 'ត្រូវការ bot ដែលបញ្ចប់ដោយ "bot"',
+    'Fix username': 'កែឈ្មោះ',
+    'Try anyway': 'ព្យាយាមដូចគ្នា',
+    'Telegram bot username saved': 'ឈ្មោះ bot របស់ Telegram ត្រូវបានរក្សាទុក',
+    'Support': 'ជំនួយ',
+    'Online': 'តាមអ៊ីនធឺណិត',
+    'Type your message…': 'វាយសាររបស់អ្នក…',
+    'Typing…': 'កំពុងវាយ…',
+    'Send': 'ផ្ញើ',
+    'Hello! Welcome to Global Online support. How can I help you today?':
+        'សួស្តី! សូមស្វាគមន៍មកកាន់ការគាំទ្រ Global Online។ តើខ្ញុំអាចជួយអ្នកយ៉ាងដូចម្តេចនៅថ្ងៃនេះ?',
+    'Ask about orders, shipping, returns or payments, or tap a quick question below.':
+        'សួរអំពីការបញ្ជាទិញ ការដឹកជញ្ជូន ការត្រឡប់មកវិញ ឬការទូទាត់ ឬប៉ះសំណួររហ័សខាងក្រោម។',
+    'Track my order': 'តាមដានការបញ្ជាទិញរបស់ខ្ញុំ',
+    'Shipping and delivery': 'ការដឹកជញ្ជូន និងការប្រគល់',
+    'Returns and refunds': 'ការត្រឡប់មកវិញ និងការសងប្រាក់',
+    'Payment methods': 'វិធីសាស្ត្រទូទាត់',
+    'Contact a human': 'ទាក់ទងអ្នកតំណាង',
+    'A human agent will reply here shortly. Meanwhile, tell us your order number to speed things up.':
+        'អ្នកតំណាងនឹងឆ្លើយតបក្នុងពេលឆាប់ៗនេះ។ ក្នុងពេលនេះ សូមប្រាប់លេខបញ្ជាទិញរបស់អ្នក ដើម្បីឱ្យកាន់តែលឿន។',
+    'You can view order status in Profile → Order History. Invoices are sent to your email, and delivery updates arrive by SMS and Telegram.':
+        'អ្នកអាចមើលស្ថានភាពការបញ្ជាទិញនៅក្នុង ប្រវត្តិរូប → ប្រវត្តិការបញ្ជាទិញ។ វិក័យប័ត្រត្រូវបានផ្ញើទៅអ៊ីមែលរបស់អ្នក ហើយការអាប់ដេតការដឹកជញ្ជូនមកដល់តាមសារ SMS និង Telegram។',
+    'Shipping takes 2–5 working days. Delivery is free for orders over the minimum and you can follow the courier link from your order details.':
+        'ការដឹកជញ្ជូនចំណាយពេល 2–5 ថ្ងៃធ្វើការ។ ការដឹកជញ្ជូនមិនគិតថ្លៃសម្រាប់ការបញ្ជាទិញលើសពីតម្លៃអប្បបរមា ហើយអ្នកអាចតាមដានតំណកន្លែងដឹកជញ្ជូនពីព័ត៌មានលម្អិតនៃការបញ្ជាទិញរបស់អ្នក។',
+    'Returns are accepted within 7 days with the item unused and its original packaging. Refunds are processed within 3–5 working days after we receive the item.':
+        'ការត្រឡប់មកវិញត្រូវបានទទួលយកក្នុងរយៈពេល 7 ថ្ងៃ ដោយទំនិញមិនបានប្រើប្រាស់ និងមានការវេចខ្ចប់ដើម។ ការសងប្រាក់ត្រូវបានដំណើរការក្នុងរយៈពេល 3–5 ថ្ងៃធ្វើការ បន្ទាប់ពីយើងទទួលបានទំនិញ។',
+    'We accept cash on delivery, credit/debit cards, KHQR, and mobile banking. Choose your payment method at checkout.':
+        'យើងទទួលយកការបង់ប្រាក់តាមម៉ែតប្រាក់ កាតឥណទាន/ឥណពន្ធ KHQR និងធនាគារឌីជីថល។ ជ្រើសរើសវិធីទូទាត់របស់អ្នកនៅពេលបញ្ជាទិញ។',
+    'For login problems, try the Forgot Password link, or sign in with Google or Telegram. Your cart and orders stay saved on this device.':
+        'សម្រាប់បញ្ហាការចូល សូមសាកល្បងតំណភ្លេចពាក្យសម្ងាត់ ឬចូលជាមួយ Google ឬ Telegram។ កន្ត្រក និងការបញ្ជាទិញរបស់អ្នកនៅរក្សាទុកលើឧបករណ៍នេះ។',
+    'You can save your default shipping address in Profile → My Address. It is prefilled at checkout automatically.':
+        'អ្នកអាចរក្សាទុកអាសយដ្ឋានដឹកជញ្ជូនលំនាំដើមរបស់អ្នកនៅក្នុង ប្រវត្តិរូប → អាសយដ្ឋានរបស់ខ្ញុំ។ វាត្រូវបានបំពេញដោយស្វ័យប្រវត្តិនៅពេលបញ្ជាទិញ។',
+    'Check the promotions banner on the home page. New coupons are announced there and on our Telegram channel regularly.':
+        'សូមពិនិត្យមើលបដាកម្មវិធីផ្សព្វផ្សាយនៅលើទំព័រដើម។ ប័ណ្ណថ្មីៗត្រូវបានប្រកាសនៅទីនោះ និងនៅលើឆានែល Telegram របស់យើងជាប្រចាំ។',
+    'Thanks for your message! Our team will reply as soon as possible. In the meantime you can find quick answers in the topics above.':
+        'សូមអរគុណសម្រាប់សាររបស់អ្នក! ក្រុមរបស់យើងនឹងឆ្លើយតបឱ្យបានឆាប់តាមដែលអាចធ្វើទៅបាន។ ក្នុងពេលនេះ អ្នកអាចស្វែងរកចម្លើយរហ័សនៅក្នុងប្រធានបទខាងលើ។',
+    'Global Online Support': 'ជំនួយ Global Online',
+    'Chat Support': 'ជំនួយតាមឆាត',
+    'Attach': 'ភ្ជាប់',
+    'Hold to record': 'ចុចដើម្បីថតសំឡេង',
+    'Microphone permission needed': 'ត្រូវការការអនុញ្ញាតិមីក្រូហ្វូន',
+    'Could not start recording': 'មិនអាចចាប់ផ្តើមថតសំឡេងបានទេ',
+    'Could not send recording': 'មិនអាចផ្ញើសំឡេងបានទេ',
+    'Could not play audio': 'មិនអាចដំណើរការសំឡេងបានទេ',
+    'Could not play video': 'មិនអាចដំណើរការវីដេអូបានទេ',
+    'Photo from gallery': 'រូបភាពពីវិចិត្រសាល',
+    'Video from gallery': 'វីដេអូពីវិចិត្រសាល',
+    'Take a photo': 'ថតរូប',
+    'Photo attached': 'រូបភាពត្រូវបានភ្ជាប់',
+    'Video attached': 'វីដេអូត្រូវបានភ្ជាប់',
+    'Recording… tap send to stop and send': 'កំពុងថត… ប៉ះផ្ញើដើម្បីបញ្ឈប់ និងផ្ញើ',
+    'For any other questions, please contact our team and we will reply as soon as possible.':
+        'សម្រាប់សំណួរផ្សេងទៀត សូមទាក់ទងក្រុមរបស់យើង ហើយយើងនឹងឆ្លើយតបឱ្យបានឆាប់តាមដែលអាចធ្វើទៅបាន។',
     'Continue as': 'បន្តជា',
     'Enter your email to receive a password reset link':
         'សូមបញ្ចូលអ៊ីមែលរបស់អ្នក ដើម្បីទទួលតំណកំណត់ពាក្យសម្ងាត់ឡើងវិញ',
@@ -62,6 +160,11 @@ class AppLocalizations {
     'Confirm password': 'បញ្ជាក់ពាក្យសម្ងាត់',
     'Could not create account': 'មិនអាចបង្កើតគណនីបានទេ',
     'Shop': 'ហាង',
+    'Global Online': 'Global Online',
+    'More': 'ច្រើនទៀត',
+    'Back': 'ត្រឡប់',
+    'Already have an account?': 'មានគណនីរួចហើយ?',
+    'No account found for this phone number': 'រកមិនឃើញគណនីសម្រាប់លេខទូរស័ព្ទនេះ',
     'Favorites': 'ចំណូលចិត្ត',
     'Remove from favorites': 'ដកចេញពីចំណូលចិត្ត',
     'Categories': 'ប្រភេទ',
@@ -93,6 +196,18 @@ class AppLocalizations {
     'Your cart is empty': 'កន្ត្រករបស់អ្នកទទេ',
     'Total': 'សរុប',
     'Checkout': 'ទូទាត់',
+    'Looks like you have no items in your cart yet.':
+        'វាហាក់ដូចជាអ្នកមិនទាន់បន្ថែមទំនិញណាមួយក្នុងកន្ត្រកទេ។',
+    'Start shopping': 'ចាប់ផ្តើមទិញទំនិញ',
+    'Subtotal': 'សរុបរង',
+    'Shipping': 'ថ្លៃដឹកជញ្ជូន',
+    'Tax': 'ពន្ធ',
+    'Free': 'ឥតគិតថ្លៃ',
+    'Remove': 'លុប',
+    'Clear cart': 'ជម្រះកន្ត្រក',
+    'Clear cart?': 'ជម្រះកន្ត្រក?',
+    'Remove all items from your cart?': 'លុបទំនិញទាំងអស់ចេញពីកន្ត្រក?',
+    'Clear': 'ជម្រះ',
     'Order placed': 'ការបញ្ជាទិញបានជោគជ័យ',
     'Your order was created successfully.':
         'ការបញ្ជាទិញរបស់អ្នកត្រូវបានបង្កើតដោយជោគជ័យ។',
@@ -135,7 +250,7 @@ class AppLocalizations {
     'Sort': 'តម្រៀប',
     'No favorites': 'គ្មានចំណូលចិត្ត',
     'Sign in to continue shopping': 'ចូលដើម្បីបន្តការទិញទំនិញ',
-    'New to Globle Online?': 'ថ្មីសម្រាប់ Globle Online?',
+    'New to Global Online?': 'ថ្មីសម្រាប់ Global Online?',
     'Name': 'ឈ្មោះ',
     'Language': 'ភាសា',
     'English': 'អង់គ្លេស',
@@ -206,6 +321,176 @@ class AppLocalizations {
     'Discount alert': 'ការជូនដំណឹងបញ្ចុះតម្លៃ',
     'Notify me': 'ជូនដំណឹងខ្ញុំ',
     'Save': 'សន្សំ',
+    'About Us': 'អំពីពួកយើង',
+    'Contact Us': 'ទាក់ទងយើង',
+    'FAQs': 'សំណួរញឹកញាប់',
+    'Terms & Conditions': 'លក្ខខណ្ឌ និងការប្រើប្រាស់',
+    'Privacy Policy': 'គោលការណ៍ឯកជនភាព',
+    'Change Password': 'ប្តូរពាក្យសម្ងាត់',
+    'Delete Account': 'លុបគណនី',
+    'Who We Are': 'ពួកយើងជានរណា',
+    'Our Mission': 'បេសកកម្មរបស់យើង',
+    'Our Values': 'តម្លៃរបស់យើង',
+    'Why Shop With Us': 'ហេតុអ្វីទិញទំនិញជាមួយយើង',
+    'Global Online is a modern online marketplace delivering quality products straight to your door in Cambodia. From electronics and fashion to home essentials and groceries, we bring thousands of curated items together in one easy app.':
+        'Global Online ជាទីផ្សារអនឡាញទំនើប ដែលបញ្ជូនផលិតផលគុណភាពដល់មាត់ទ្វារអ្នកនៅកម្ពុជា។ ចាប់ពីគ្រឿងអេឡិចត្រូនិក និងម៉ូដ រហូតដល់របស់ប្រើប្រាស់ក្នុងផ្ទះ និងគ្រឿងឧបភោគភ័ណ្ឌ យើងនាំយកផលិតផលរាប់ពាន់មុខមករួមគ្នាក្នុងកម្មវិធីងាយស្រួលមួយ។',
+    'Founded with a simple idea — trustworthy shopping from your phone — we combine fair prices, honest service, and fast delivery.':
+        'បង្កើតឡើងដោយគំនិតសាមញ្ញ — ការទិញទំនិញដែលអាចទុកចិត្តបានពីទូរស័ព្ទរបស់អ្នក — យើងរួមបញ្ចូលតម្លៃសមរម្យ សេវាកម្មស្មោះត្រង់ និងការដឹកជញ្ជូនលឿន។',
+    'Our mission is to make online shopping simple, safe and enjoyable for everyone. We work directly with suppliers so you get great value with every order.':
+        'បេសកកម្មរបស់យើងគឺធ្វើឱ្យការទិញទំនិញតាមអនឡាញសាមញ្ញ មានសុវត្ថិភាព និងរីករាយសម្រាប់មនុស្សគ្រប់គ្នា។ យើងធ្វើការផ្ទាល់ជាមួយអ្នកផ្គត់ផ្គង់ ដើម្បីឱ្យអ្នកទទួលបានតម្លៃល្អបំផុតជាមួយរាល់ការបញ្ជាទិញ។',
+    'Customer first — your happiness drives every decision we make.':
+        'អតិថិជនជាអាទិភាព — សុភមង្គលរបស់អ្នកជំរុញរាល់ការសម្រេចចិត្តរបស់យើង។',
+    'Honesty — clear prices, real stock and transparent policies.':
+        'ភាពស្មោះត្រង់ — តម្លៃច្បាស់លាស់ ស្តុកពិតប្រាកដ និងគោលការណ៍ថ្លា។',
+    'Sustainability — we reduce waste and support local partners.':
+        'និរន្តរភាព — យើងកាត់បន្ថយកាកសំណល់ និងគាំទ្រដៃគូក្នុងស្រុក។',
+    'Innovation — we keep improving the app around your needs.':
+        'ការច្នៃប្រឌិត — យើងបន្តកែលម្អកម្មវិធីឱ្យសមនឹងតម្រូវការរបស់អ្នក។',
+    'Fast, tracked delivery across Cambodia.':
+        'ការដឹកជញ្ជូនលឿន និងតាមដានបានទូទាំងកម្ពុជា។',
+    'Flexible payment: cash on delivery, cards, KHQR and mobile banking.':
+        'ការទូទាត់បត់បែន៖ បង់ប្រាក់ពេលទទួលទំនិញ កាត ខេអេសខេអរ (KHQR) និងធនាគារឌីជីថល។',
+    'Friendly support on chat, phone and Telegram.':
+        'ការគាំទ្រមិត្តភាពតាមឆាត ទូរស័ព្ទ និង Telegram។',
+    'Easy returns within 7 days of delivery.':
+        'ការត្រឡប់ទំនិញងាយស្រួលក្នុងរយៈពេល 7 ថ្ងៃបន្ទាប់ពីទទួល។',
+    'Get in touch': 'ទាក់ទងមកយើង',
+    'Call': 'ហៅ',
+    'Open map': 'បើកផែនទី',
+    'Working hours': 'ម៉ោងបម្រើការ',
+    'Monday – Sunday, 8:00 AM – 20:00 PM': 'ច័ន្ទ – អាទិត្យ 8:00 AM – 20:00 PM',
+    'Faster help': 'ជំនួយលឿនជាងមុន',
+    'We would love to hear from you. Reach out any time — our team replies as fast as possible.':
+        'យើងរីករាយនឹងបានស្តាប់មតិពីអ្នក។ ទាក់ទងមកយើងបានគ្រប់ពេល — ក្រុមរបស់យើងឆ្លើយតបឱ្យបានលឿនតាមដែលអាចធ្វើទៅបាន។',
+    'For order status, shipping questions and returns, check the FAQ or open Chat Support — our assistant answers instantly.':
+        'សម្រាប់ស្ថានភាពការបញ្ជាទិញ ការដឹកជញ្ជូន និងការត្រឡប់ទំនិញ សូមពិនិត្យមើល FAQs ឬបើកការគាំទ្រតាមឆាត — ជំនួយការរបស់យើងឆ្លើយភ្លាមៗ។',
+    'Send us an email': 'ផ្ញើអ៊ីមែលមកយើង',
+    'Call us now': 'ហៅយើងឥឡូវនេះ',
+    'Telegram': 'តេឡេក្រាម',
+    'Facebook': 'ហ្វេសប៊ុក',
+    'Open': 'បើក',
+    'Leave a message': 'ទុកសារមួយ',
+    'Thanks! We will get back to you soon.':
+        'អរគុណ! យើងនឹងត្រឡប់មកទាក់ទងអ្នកវិញឆាប់ៗនេះ។',
+    '1. Overview': '១. ទិដ្ឋភាពទូទៅ',
+    'By using the Global Online application you agree to these terms. If you do not agree, please do not use the app. We may update these terms from time to time, and continued use means you accept the latest version.':
+        'ដោយការប្រើប្រាស់កម្មវិធី Global Online អ្នកយល់ព្រមនឹងលក្ខខណ្ឌទាំងនេះ។ ប្រសិនបើអ្នកមិនយល់ព្រមទេ សូមកុំប្រើប្រាស់កម្មវិធីនេះ។ យើងអាចធ្វើបច្ចុប្បន្នភាពលក្ខខណ្ឌទាំងនេះតាមពេលវេលា ហើយការបន្តប្រើប្រាស់មានន័យថា អ្នកទទួលយកកំណែចុងក្រោយបំផុត។',
+    '2. Orders & Payment': '២. ការបញ្ជាទិញ និងការទូទាត់',
+    'All prices are shown in US dollars and include applicable taxes. An order is confirmed once you complete checkout. We accept cash on delivery, credit and debit cards, KHQR and mobile banking.':
+        'តម្លៃទាំងអស់បង្ហាញជាដុល្លារអាមេរិក និងរួមបញ្ចូលពន្ធអនុវត្ត។ ការបញ្ជាទិញត្រូវបានបញ្ជាក់នៅពេលអ្នកបញ្ចប់ការទូទាត់។ យើងទទួលយកការបង់ប្រាក់ពេលទទួលទំនិញ កាតឥណទាន និងឥណពន្ធ KHQR និងធនាគារឌីជីថល។',
+    'We reserve the right to refuse or cancel an order, for example when a product is out of stock or a price error occurred.':
+        'យើងរក្សាសិទ្ធិបដិសេធ ឬលុបចោលការបញ្ជាទិញ ឧទាហរណ៍ នៅពេលផលិតផលអស់ស្តុក ឬមានកំហុសតម្លៃ។',
+    '3. Shipping & Delivery': '៣. ការដឹកជញ្ជូន និងការប្រគល់',
+    'Orders are delivered in 2–5 working days. Delivery is free for orders over the minimum amount. After dispatch you can track your order from Profile → Order History.':
+        'ការបញ្ជាទិញត្រូវបានប្រគល់ក្នុងរយៈពេល 2–5 ថ្ងៃធ្វើការ។ ការដឹកជញ្ជូនមិនគិតថ្លៃសម្រាប់ការបញ្ជាទិញលើសពីតម្លៃអប្បបរមា។ បន្ទាប់ពីការផ្ញើចេញ អ្នកអាចតាមដានការបញ្ជាទិញរបស់អ្នកពី ប្រវត្តិរូប → ប្រវត្តិការបញ្ជាទិញ។',
+    '4. Returns & Refunds': '៤. ការត្រឡប់ទំនិញ និងការសងប្រាក់',
+    'You may return unused items in their original packaging within 7 days. Refunds are processed within 3–5 working days after we receive the returned item.':
+        'អ្នកអាចត្រឡប់ទំនិញដែលមិនបានប្រើប្រាស់ ក្នុងការវេចខ្ចប់ដើម ក្នុងរយៈពេល 7 ថ្ងៃ។ ការសងប្រាក់ត្រូវបានដំណើរការក្នុងរយៈពេល 3–5 ថ្ងៃធ្វើការ បន្ទាប់ពីយើងទទួលបានទំនិញដែលត្រូវត្រឡប់។',
+    '5. Account & Using the App': '៥. គណនី និងការប្រើប្រាស់កម្មវិធី',
+    'You are responsible for keeping your login details safe and for all activity on your account. You may not misuse the app, attempt to break its security, or resell our content.':
+        'អ្នកទទួលខុសត្រូវក្នុងការរក្សាព័ត៌មានចូលរបស់អ្នកឱ្យមានសុវត្ថិភាព និងរាល់សកម្មភាពលើគណនីរបស់អ្នក។ អ្នកមិនអាចប្រើប្រាស់កម្មវិធីខុសគោលបំណង ព្យាយាមបំបែកប្រព័ន្ធសន្តិសុខ ឬលក់បន្តខ្លឹមសាររបស់យើងបានទេ។',
+    '6. Limitation of Liability': '៦. ដែនកំណត់នៃការទទួលខុសត្រូវ',
+    'Global Online is not liable for damages caused by misuse of products or by events beyond our control, such as delays caused by third party couriers or natural disasters.':
+        'Global Online មិនទទួលខុសត្រូវចំពោះការខូចខាតដែលបណ្តាលមកពីការប្រើប្រាស់ផលិតផលខុស ឬព្រឹត្តិការណ៍ហួសពីការគ្រប់គ្រងរបស់យើង ដូចជា ការពន្យារពេលដោយក្រុមហ៊ុនដឹកជញ្ជូនភាគីទីបី ឬគ្រោះធម្មជាតិ។',
+    '7. Contact': '៧. ទំនាក់ទំនង',
+    'For any question about these terms, contact us via email at support@globalonline.com or use Chat Support in the app.':
+        'សម្រាប់សំណួរណាមួយអំពីលក្ខខណ្ឌទាំងនេះ សូមទាក់ទងយើងតាមអ៊ីមែល support@globalonline.com ឬប្រើការគាំទ្រតាមឆាតក្នុងកម្មវិធី។',
+    'Information We Collect': 'ព័ត៌មានដែលយើងប្រមូល',
+    'We collect the information you give us when you create an account or place an order: your name, phone number, email and delivery address. We also store minimal data on this device, such as your password for local logins, your saved address and your shopping cart.':
+        'យើងប្រមូលព័ត៌មានដែលអ្នកផ្តល់ឱ្យយើង នៅពេលអ្នកបង្កើតគណនី ឬបញ្ជាទិញ៖ ឈ្មោះរបស់អ្នក លេខទូរស័ព្ទ អ៊ីមែល និងអាសយដ្ឋានដឹកជញ្ជូន។ យើងក៏រក្សាទុកទិន្នន័យតិចតួចនៅលើឧបករណ៍នេះ ដូចជា ពាក្យសម្ងាត់សម្រាប់ការចូលក្នុងស្រុក អាសយដ្ឋានដែលបានរក្សាទុក និងកន្ត្រកទិញទំនិញរបស់អ្នក។',
+    'How We Use Your Information': 'របៀបដែលយើងប្រើប្រាស់ព័ត៌មានរបស់អ្នក',
+    'To process and deliver your orders.': 'ដើម្បីដំណើរការ និងប្រគល់ការបញ្ជាទិញរបស់អ្នក។',
+    'To send you order updates and, if you allow it, discount alerts.':
+        'ដើម្បីផ្ញើការអាប់ដេតការបញ្ជាទិញ ហើយប្រសិនបើអ្នកអនុញ្ញាត ការជូនដំណឹងបញ្ចុះតម្លៃ។',
+    'To provide customer support and answer your questions.':
+        'ដើម្បីផ្តល់ការគាំទ្រអតិថិជន និងឆ្លើយសំណួររបស់អ្នក។',
+    'To improve our products and services.': 'ដើម្បីកែលម្អផលិតផល និងសេវាកម្មរបស់យើង។',
+    'Cookies & Local Storage': 'ខូគី និងការផ្ទុកក្នុងស្រុក',
+    'The app stores only the information needed for it to work. This data stays on your device and is never sold to third parties.':
+        'កម្មវិធីរក្សាទុកតែព័ត៌មានចាំបាច់សម្រាប់ប្រតិបត្តិការរបស់វាប៉ុណ្ណោះ។ ទិន្នន័យនេះស្ថិតនៅលើឧបករណ៍របស់អ្នក ហើយមិនត្រូវបានលក់ទៅឱ្យភាគីទីបីឡើយ។',
+    'Data Sharing': 'ការចែករំលែកទិន្នន័យ',
+    'We share your delivery details only with the courier that delivers your order, and with payment providers only to complete a payment you chose. We never sell your personal data.':
+        'យើងចែករំលែកព័ត៌មានលម្អិតនៃការដឹកជញ្ជូនរបស់អ្នកតែជាមួយក្រុមហ៊ុនដឹកជញ្ជូនដែលប្រគល់ការបញ្ជាទិញរបស់អ្នក និងជាមួយអ្នកផ្តល់សេវាទូទាត់តែដើម្បីបញ្ចប់ការទូទាត់ដែលអ្នកជ្រើសរើសប៉ុណ្ណោះ។ យើងមិនដែលលក់ទិន្នន័យផ្ទាល់ខ្លួនរបស់អ្នកទេ។',
+    'Data Security': 'សន្តិសុខទិន្នន័យ',
+    'We take reasonable steps to protect your personal information. Local sign-in data is stored within the app on your own device.':
+        'យើងចាត់វិធានការសមហេតុផល ដើម្បីការពារព័ត៌មានផ្ទាល់ខ្លួនរបស់អ្នក។ ទិន្នន័យចូលក្នុងស្រុកត្រូវបានរក្សាទុកនៅក្នុងកម្មវិធីលើឧបករណ៍របស់អ្នកផ្ទាល់។',
+    'Your Rights': 'សិទ្ធិរបស់អ្នក',
+    'You can edit your profile, change your password, or delete your account at any time from the Profile page. Deleting your account removes your saved data from this device.':
+        'អ្នកអាចកែសម្រួលប្រវត្តិរូប ប្តូរពាក្យសម្ងាត់ ឬលុបគណនីរបស់អ្នកបានគ្រប់ពេលពីទំព័រប្រវត្តិរូប។ ការលុបគណនីរបស់អ្នកដកចេញនូវទិន្នន័យដែលបានរក្សាទុកពីឧបករណ៍នេះ។',
+    'If you have questions about this privacy policy, email support@globalonline.com or use Chat Support in the app.':
+        'ប្រសិនបើអ្នកមានសំណួរអំពីគោលការណ៍ឯកជនភាពនេះ សូមផ្ញើអ៊ីមែលមក support@globalonline.com ឬប្រើការគាំទ្រតាមឆាតក្នុងកម្មវិធី។',
+    'Answers to the questions we are asked the most.':
+        'ចម្លើយចំពោះសំណួរដែលគេសួរញឹកញាប់បំផុត។',
+    'How do I place an order?': 'តើខ្ញុំបញ្ជាទិញដោយរបៀបណា?',
+    'Browse products, add them to your cart, then tap Checkout. Enter your (or pick a saved) delivery address, confirm and the order is placed.':
+        'រកមើលផលិតផល បន្ថែមទៅកន្ត្រក រួចប៉ះ ទូទាត់។ បញ្ចូលអាសយដ្ឋានដឹកជញ្ជូនរបស់អ្នក បញ្ជាក់ រួចការបញ្ជាទិញត្រូវបានធ្វើឡើង។',
+    'What payment methods do you accept?': 'តើអ្នកទទួលយកវិធីទូទាត់អ្វីខ្លះ?',
+    'We accept cash on delivery, credit/debit cards, KHQR and mobile banking. You choose the method at checkout.':
+        'យើងទទួលយកការបង់ប្រាក់ពេលទទួលទំនិញ កាតឥណទាន/ឥណពន្ធ KHQR និងធនាគារឌីជីថល។ អ្នកជ្រើសរើសវិធីសាស្ត្រនៅពេលទូទាត់។',
+    'How long does shipping take?': 'តើការដឹកជញ្ជូនចំណាយពេលប៉ុន្មាន?',
+    'Shipping takes 2–5 working days depending on your location. You receive SMS and Telegram updates along the way.':
+        'ការដឹកជញ្ជូនចំណាយពេល 2–5 ថ្ងៃធ្វើការ អាស្រ័យលើទីតាំងរបស់អ្នក។ អ្នកនឹងទទួលការអាប់ដេតតាម SMS និង Telegram ពេញដំណើរ។',
+    'Is delivery free?': 'តើការដឹកជញ្ជូនមិនគិតថ្លៃទេ?',
+    'Delivery is free for orders over the minimum order value. The exact shipping cost, if any, is shown at checkout.':
+        'ការដឹកជញ្ជូនមិនគិតថ្លៃសម្រាប់ការបញ្ជាទិញលើសពីតម្លៃអប្បបរមា។ តម្លៃដឹកជញ្ជូនពិតប្រាកដ ប្រសិនបើមាន ត្រូវបានបង្ហាញនៅពេលទូទាត់។',
+    'How can I track my order?': 'តើខ្ញុំអាចតាមដានការបញ្ជាទិញរបស់ខ្ញុំដោយរបៀបណា?',
+    'Open Profile → Order History and tap your order. You can follow the courier link from your order details.':
+        'បើក ប្រវត្តិរូប → ប្រវត្តិការបញ្ជាទិញ ហើយប៉ះការបញ្ជាទិញរបស់អ្នក។ អ្នកអាចតាមដានតំណកន្លែងដឹកជញ្ជូនពីព័ត៌មានលម្អិតនៃការបញ្ជាទិញរបស់អ្នក។',
+    'What is your return and refund policy?': 'តើគោលការណ៍ត្រឡប់ទំនិញ និងសងប្រាក់របស់អ្នកជាអ្វី?',
+    'Returns are accepted within 7 days with the item unused and in its original packaging. Refunds are processed within 3–5 working days after we receive the item.':
+        'ការត្រឡប់ទំនិញត្រូវបានទទួលយកក្នុងរយៈពេល 7 ថ្ងៃ ដោយទំនិញមិនបានប្រើប្រាស់ និងមានការវេចខ្ចប់ដើម។ ការសងប្រាក់ត្រូវបានដំណើរការក្នុងរយៈពេល 3–5 ថ្ងៃធ្វើការបន្ទាប់ពីយើងទទួលបានទំនិញ។',
+    'Can I change or cancel my order?': 'តើខ្ញុំអាចផ្លាស់ប្តូរ ឬលុបចោលការបញ្ជាទិញរបស់ខ្ញុំបានទេ?',
+    'As soon as your order is placed it goes into processing. Contact support quickly and we will do our best to change or cancel it before dispatch.':
+        'នៅពេលដាក់ការបញ្ជាទិញរួច វាចូលក្នុងដំណើរការ។ សូមទាក់ទងជំនួយឱ្យលឿន ហើយយើងនឹងព្យាយាមផ្លាស់ប្តូរ ឬលុបចោលវាមុនការផ្ញើចេញ។',
+    'How do I change my password?': 'តើខ្ញុំប្តូរពាក្យសម្ងាត់ដោយរបៀបណា?',
+    'Open Profile → Change Password, enter your current and new password, then save. The new password is used the next time you sign in.':
+        'បើក ប្រវត្តិរូប → ប្តូរពាក្យសម្ងាត់ បញ្ចូលពាក្យសម្ងាត់បច្ចុប្បន្ន និងថ្មី រួចរក្សាទុក។ ពាក្យសម្ងាត់ថ្មីនឹងត្រូវប្រើនៅពេលអ្នកចូលលើកក្រោយ។',
+    'How do I delete my account?': 'តើខ្ញុំលុបគណនីដោយរបៀបណា?',
+    'Open Profile → Delete Account. If you have pending orders, they must be settled first. After deletion your saved data is removed from this device.':
+        'បើក ប្រវត្តិរូប → លុបគណនី។ ប្រសិនបើអ្នកមានការបញ្ជាទិញដែលកំពុងដំណើរការ ពួកវាត្រូវតែត្រូវបានបញ្ចប់ជាមុនសិន។ បន្ទាប់ពីលុប ទិន្នន័យដែលបានរក្សាទុករបស់អ្នកត្រូវបានដកចេញពីឧបករណ៍នេះ។',
+    'How do I contact support?': 'តើខ្ញុំទាក់ទងជំនួយដោយរបៀបណា?',
+    'Use Chat Support in the app, call +855 12 345 678, or email support@globalonline.com.':
+        'ប្រើការគាំទ្រតាមឆាតក្នុងកម្មវិធី ហៅ +855 12 345 678 ឬផ្ញើអ៊ីមែល support@globalonline.com។',
+    'Current Password': 'ពាក្យសម្ងាត់បច្ចុប្បន្ន',
+    'New Password': 'ពាក្យសម្ងាត់ថ្មី',
+    'Confirm new password': 'បញ្ជាក់ពាក្យសម្ងាត់ថ្មី',
+    'Password changed successfully': 'ពាក្យសម្ងាត់ត្រូវបានប្តូរដោយជោគជ័យ',
+    'Current password is incorrect': 'ពាក្យសម្ងាត់បច្ចុប្បន្នមិនត្រឹមត្រូវទេ',
+    'Passwords do not match': 'ពាក្យសម្ងាត់ទាំងពីរមិនត្រូវគ្នាទេ',
+    'New password must be different from the current one':
+        'ពាក្យសម្ងាត់ថ្មីត្រូវតែខុសពីពាក្យសម្ងាត់បច្ចុប្បន្ន',
+    'Show passwords': 'បង្ហាញពាក្យសម្ងាត់',
+    'Hide passwords': 'លាក់ពាក្យសម្ងាត់',
+    'No password is set for this account yet. Set a password so you can sign in with it later.':
+        'មិនទាន់មានពាក្យសម្ងាត់សម្រាប់គណនីនេះទេ។ កំណត់ពាក្យសម្ងាត់ ដើម្បីអាចចូលជាមួយវានៅពេលក្រោយ។',
+    'Delete account?': 'លុបគណនី?',
+    'Your profile, saved address, cart, favorites and local password will be removed from this device. This cannot be undone.':
+        'ប្រវត្តិរូប អាសយដ្ឋានដែលបានរក្សាទុក កន្ត្រក ចំណូលចិត្ត និងពាក្យសម្ងាត់ក្នុងស្រុករបស់អ្នក នឹងត្រូវបានដកចេញពីឧបករណ៍នេះ។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។',
+    'Delete': 'លុប',
+    'Deleting your account removes your saved profile, address, cart, favorites and local password from this device. This action cannot be undone.':
+        'ការលុបគណនីរបស់អ្នក ដកចេញនូវប្រវត្តិរូប អាសយដ្ឋាន កន្ត្រក ចំណូលចិត្ត និងពាក្យសម្ងាត់ក្នុងស្រុកពីឧបករណ៍នេះ។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។',
+    'Active orders': 'ការបញ្ជាទិញសកម្ម',
+    'You have pending (processing) orders. Please wait until they are completed before deleting your account.':
+        'អ្នកមានការបញ្ជាទិញដែលកំពុងដំណើរការ។ សូមរង់ចាំរហូតដល់ពួកវាត្រូវបានបញ្ចប់ មុនពេលលុបគណនីរបស់អ្នក។',
+    'Delete my account': 'លុបគណនីរបស់ខ្ញុំ',
+    'Keep my account': 'រក្សាគណនីរបស់ខ្ញុំ',
+    'After deleting your account, you will not be able to use it again.':
+        'បន្ទាប់ពីលុបគណនីរបស់អ្នក អ្នកនឹងមិនអាចប្រើវាម្តងទៀតបានទេ។',
+    'Are you sure you want to delete your account?': 'តើអ្នកប្រាកដថាចង់លុបគណនីរបស់អ្នកឬ?',
+    'Order Cancellation': 'ការលុបចោលការបញ្ជាទិញ',
+    'Before deleting your account, make sure you don\'t have any order that is in progress.':
+        'មុនពេលលុបគណនីរបស់អ្នក សូមប្រាកដថាអ្នកមិនមានការបញ្ជាទិញណាមួយដែលកំពុងដំណើរការទេ។',
+    'Account Deletion Reason': 'មូលហេតុនៃការលុបគណនី',
+    'We are really sorry to hear that you decided to leave us. However, your feedback can be useful for us to improve our system.':
+        'យើងពិតជាសោកស្តាយដែលឮថាអ្នកសម្រេចចិត្តចាកចេញពីយើង។ ទោះជាយ៉ាងណា មតិរបស់អ្នកអាចមានប្រយោជន៍សម្រាប់យើងក្នុងការកែលម្អប្រព័ន្ធរបស់យើង។',
+    'Add your reason here': 'បន្ថែមមូលហេតុរបស់អ្នកនៅទីនេះ',
+    'Share your feedback...': 'ចែករំលែកមតិរបស់អ្នក...',
+    'Are you sure you want to delete this account?': 'តើអ្នកប្រាកដថាចង់លុបគណនីនេះឬ?',
+    'Give feedback': 'ផ្តល់មតិ',
+    'Why are you leaving? (optional)': 'ហេតុអ្វីបានជាអ្នកចាកចេញ? (មិនចាំបាច់)',
+    'Password is required': 'សូមបញ្ចូលពាក្យសម្ងាត់',
+    'Enter your password to confirm.': 'សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីបញ្ជាក់។',
+    'No password is set for this account yet.': 'មិនទាន់មានពាក្យសម្ងាត់សម្រាប់គណនីនេះទេ។',
   };
 
   static const Map<int, String> _descKm = {

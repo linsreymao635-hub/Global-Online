@@ -1,9 +1,9 @@
 {
-    "name": "online_shop_mvp_full",
-    "short_name": "online_shop_mvp_full",
+    "name": "Global Online",
+    "short_name": "Global Online",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#ffffff",
     "theme_color": "#0175C2",
     "description": "A new Flutter project.",
     "orientation": "portrait-primary",

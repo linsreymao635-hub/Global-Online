@@ -19,6 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -27,12 +28,47 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="icons/Icon-192.png"/>
 
   <title>online_shop_mvp_full</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    #flt-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    #flt-splash img {
+      width: 96px;
+      height: 96px;
+      border-radius: 16px;
+    }
+    #flt-splash .spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #e53935;
+      border-radius: 50%;
+      animation: flt-spin 0.9s linear infinite;
+    }
+    @keyframes flt-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div id="flt-splash">
+    <img src="icons/Icon-192.png" alt="">
+    <div class="spinner"></div>
+  </div>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -41,6 +77,14 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    function fltRemoveSplash() {
+      const s = document.getElementById('flt-splash');
+      if (s && s.parentNode) s.parentNode.removeChild(s);
+    }
+    window.addEventListener('flutter-first-frame', fltRemoveSplash);
+    setTimeout(fltRemoveSplash, 15000);
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

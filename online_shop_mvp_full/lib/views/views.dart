@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -8,13 +9,28 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
+import 'chat_support_page.dart';
+import 'info_pages.dart';
 import '../presenters/presenters.dart';
 import '../repositories/repositories.dart';
 import '../services/api_service.dart';
 import '../services/app_settings.dart';
+import '../services/telegram_auth_service.dart';
+
+/// A lightweight local account so the user can browse and order products
+/// without an internet login.
+User guestUser() => User(
+    id: 0,
+    firstName: 'Guest',
+    lastName: '',
+    username: 'guest',
+    email: '',
+    image: null,
+    token: null);
 
 ImageProvider? userImage(String? s) {
   if (s == null || s.isEmpty) return null;
@@ -22,92 +38,226 @@ ImageProvider? userImage(String? s) {
   return NetworkImage(s);
 }
 
-Widget socialButtons(
-    BuildContext c, void Function(User) onLogin, String Function(String) tr) {
-  Future<void> confirm(
-      User u, String provider, IconData icon) async {
-    final ok = await showDialog<bool>(
-      context: c,
-      builder: (dc) => AlertDialog(
-        icon: Icon(icon, size: 36, color: Colors.blueAccent),
-        title: Text(provider),
-        content: Text('${tr('Continue as')} ${u.fullName}\n(${u.email})?',
-            textAlign: TextAlign.center),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dc, false),
-              child: Text(tr('Cancel'))),
-          FilledButton(
-              onPressed: () => Navigator.pop(dc, true),
-              child: Text(tr('Continue'))),
+class SocialButtons extends StatefulWidget {
+  final void Function(User) onLogin;
+  final Future<User?> Function() googleLogin;
+  const SocialButtons(
+      {super.key, required this.onLogin, required this.googleLogin});
+  @override
+  State<SocialButtons> createState() => _SocialButtonsState();
+}
+
+class _SocialButtonsState extends State<SocialButtons> {
+  bool _busy = false;
+
+  Future<void> _google() async {
+    setState(() => _busy = true);
+    try {
+      final u = await widget.googleLogin();
+      if (!mounted) return;
+      // null = the user closed the picker without choosing.
+      if (u == null) return;
+      // Real Google account selected → go straight to the shop.
+      widget.onLogin(u);
+    } catch (_) {
+      if (!mounted) return;
+      // Google couldn't complete on this device (missing Android client ID
+      // etc.) — silently enter the shop as a guest so the user is never
+      // stuck on the sign-in page.
+      widget.onLogin(guestUser());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _telegram() async {
+    // A real Telegram login needs a bot whose username ends with "bot".
+    // With no valid bot the widget cannot load — skip straight to the shop
+    // as a guest. No error screens, no bot-name warnings.
+    if (!TelegramAuthService.isConfigured ||
+        !TelegramAuthService.botLooksValid(TelegramAuthService.botUsername)) {
+      widget.onLogin(guestUser());
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final u = await Navigator.push<User>(
+        context,
+        MaterialPageRoute(builder: (_) => const TelegramLoginPage()),
+      );
+      if (!mounted) return;
+      if (u != null) {
+        // Real Telegram account selected → go straight to the shop.
+        widget.onLogin(u);
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    // Telegram didn't complete (canceled, widget didn't load, network issue,
+    // etc.) — enter as guest so the user always reaches the shop page.
+    widget.onLogin(guestUser());
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final tr = AppLocalizations.of(c).t;
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              minimumSize: const Size.fromHeight(48),
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: _busy ? null : _google,
+            icon: _busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Image.network(
+                    'https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/120px-Google_%22G%22_Logo.svg.png',
+                    width: 20,
+                    height: 20,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.g_mobiledata,
+                        color: Colors.blue,
+                        size: 26),
+                  ),
+            label: Text(tr('Continue with Google'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF229ED9),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: _busy ? null : _telegram,
+            icon: const Icon(Icons.send, size: 20),
+            label: Text(tr('Continue with Telegram'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class TelegramLoginPage extends StatefulWidget {
+  const TelegramLoginPage({super.key});
+  @override
+  State<TelegramLoginPage> createState() => _TelegramLoginPageState();
+}
+
+class _TelegramLoginPageState extends State<TelegramLoginPage> {
+  bool _failed = false;
+  bool _loaded = false;
+
+  void _onAuth(String json) {
+    final u = TelegramAuthService.userFromJson(json);
+    if (u != null && mounted) Navigator.pop(context, u);
+  }
+
+  late final WebViewController _controller = WebViewController()
+    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    ..setBackgroundColor(Colors.white)
+    ..setNavigationDelegate(NavigationDelegate(
+      onWebResourceError: (WebResourceError e) {
+        if (mounted) setState(() => _failed = true);
+      },
+      onPageFinished: (url) {
+        if (mounted) setState(() => _loaded = true);
+      },
+    ))
+    ..addJavaScriptChannel(
+      'TelegramLogin',
+      onMessageReceived: (m) => _onAuth(m.message),
+    );
+
+  Future<void> _load() async {
+    setState(() {
+      _failed = false;
+      _loaded = false;
+    });
+    try {
+      await _controller.loadHtmlString(
+        TelegramAuthService.widgetHtml(),
+        baseUrl: TelegramAuthService.baseUrl,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text(tr('Continue with Telegram'))),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (!_loaded && !_failed)
+            const Center(child: CircularProgressIndicator()),
+          if (_failed)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_off,
+                        size: 48, color: sch.onSurfaceVariant),
+                    const SizedBox(height: 14),
+                    Text(
+                      tr('Telegram login could not load'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      tr('Check your internet connection and try again.'),
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(fontSize: 13, color: sch.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(tr('Retry')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
-    if (ok == true) onLogin(u);
   }
-
-  return Column(
-    children: [
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black87,
-            minimumSize: const Size.fromHeight(48),
-            side: BorderSide(color: Colors.grey.shade300),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          onPressed: () => confirm(
-            User(
-                id: 999,
-                firstName: 'Google',
-                lastName: 'User',
-                username: 'google_user',
-                email: 'google.user@gmail.com'),
-            tr('Continue with Google'),
-            Icons.g_mobiledata,
-          ),
-          icon: Image.network(
-            'https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/120px-Google_%22G%22_Logo.svg.png',
-            width: 20,
-            height: 20,
-            errorBuilder: (_, __, ___) =>
-                const Icon(Icons.g_mobiledata, color: Colors.blue, size: 26),
-          ),
-          label: Text(tr('Continue with Google'),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-        ),
-      ),
-      const SizedBox(height: 10),
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF229ED9),
-            foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          onPressed: () => confirm(
-            User(
-                id: 998,
-                firstName: 'Telegram',
-                lastName: 'User',
-                username: 'telegram_user',
-                email: 'telegram.user@telegram.org'),
-            tr('Continue with Telegram'),
-            Icons.send,
-          ),
-          icon: const Icon(Icons.send, size: 20),
-          label: Text(tr('Continue with Telegram'),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-        ),
-      ),
-    ],
-  );
 }
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -182,7 +332,15 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
       msg(tr('Passwords do not match'));
       return;
     }
+    // Apply the new password to the local account registered with this
+    // phone number so the next login accepts it.
+    final username = AppSettings.findUsernameByPhone(phone.text);
+    if (username == null) {
+      msg(tr('No account found for this phone number'));
+      return;
+    }
     setState(() => busy = true);
+    await AppSettings.setLocalPassword(username, npass.text);
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     setState(() => busy = false);
@@ -205,16 +363,16 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
   }
 
   Widget field(TextEditingController c, String t, IconData icon,
-      {bool obscure = false, bool code_ = false}) =>
+          {bool obscure = false,
+          bool code_ = false,
+          TextInputType? keyboard,
+          List<TextInputFormatter>? formatters}) =>
       TextField(
         controller: c,
         obscureText: obscure,
-        keyboardType: code_
-            ? TextInputType.number
-            : obscure
-                ? TextInputType.visiblePassword
-                : TextInputType.phone,
+        keyboardType: keyboard,
         maxLength: code_ ? 6 : null,
+        inputFormatters: formatters,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           labelText: t,
@@ -250,7 +408,9 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 20),
-            field(phone, tr('Phone'), Icons.phone_android),
+            field(phone, tr('Phone'), Icons.phone_android,
+                keyboard: TextInputType.phone,
+                formatters: [FilteringTextInputFormatter.digitsOnly]),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: busy ? null : sendCode,
@@ -272,7 +432,9 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
           children: [
             const SizedBox(height: 20),
             field(codeInput, tr('Verification code'), Icons.password,
-                code_: true),
+                code_: true,
+                keyboard: TextInputType.number,
+                formatters: [FilteringTextInputFormatter.digitsOnly]),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: verifyCode,
@@ -288,10 +450,10 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
           children: [
             const SizedBox(height: 20),
             field(npass, tr('New Password'), Icons.lock_outline,
-                obscure: !show),
+                obscure: !show, keyboard: TextInputType.visiblePassword),
             const SizedBox(height: 14),
             field(cpass, tr('Confirm password'), Icons.lock_outline,
-                obscure: !show),
+                obscure: !show, keyboard: TextInputType.visiblePassword),
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerRight,
@@ -401,27 +563,29 @@ class _Login extends State<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
+              // Full logo on a card — BoxFit.contain so the wide banner is
+              // never cropped (a fixed 96x96 cover box showed only the middle).
               Center(
                 child: Container(
-                  width: 96,
-                  height: 96,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                        colors: [sch.primary, sch.tertiary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(28),
+                    color: sch.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: sch.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                        color: sch.shadow.withValues(alpha: 0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.shopping_bag,
-                      size: 52, color: Colors.white),
+                  child: Image.asset('assets/images/image.png',
+                      height: 96, fit: BoxFit.contain),
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Globle Online',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 30, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
               Text(tr('Sign in to continue shopping'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -481,7 +645,7 @@ class _Login extends State<LoginPage> {
               TextButton(
                 onPressed: widget.signup,
                 child: Text.rich(TextSpan(
-                  text: '${tr('New to Globle Online?')} ',
+                  text: '${tr('New to Global Online?')} ',
                   children: [
                     TextSpan(
                       text: tr('Create Account'),
@@ -491,6 +655,7 @@ class _Login extends State<LoginPage> {
                   ],
                 )),
               ),
+              const SizedBox(height: 4),
               const SizedBox(height: 18),
               Row(
                 children: [
@@ -504,7 +669,8 @@ class _Login extends State<LoginPage> {
                 ],
               ),
               const SizedBox(height: 20),
-              socialButtons(c, widget.success, tr),
+              SocialButtons(
+                  onLogin: widget.success, googleLogin: widget.p.googleLogin),
               const SizedBox(height: 12),
             ],
           ),
@@ -542,10 +708,25 @@ class _Signup extends State<SignupPage> {
     try {
       final x = await widget.p.signup(
           f: f.text, l: l.text, u: uname, p: p.text, c: cp.text, e: e.text);
-      if (x == null) {
-        msg(AppLocalizations.of(context).t('Could not create account'));
-      } else {
+      // Remember the account on this device so it can actually sign in
+      // later (the demo API cannot authenticate newly created users).
+      await AppSettings.saveLocalAccount(
+          username: uname,
+          password: p.text,
+          firstName: f.text.trim(),
+          lastName: l.text.trim(),
+          phone: e.text.trim());
+      if (x != null) {
         widget.success(x);
+      } else {
+        // Even if the demo API rejected the request, the account exists
+        // locally and must be usable.
+        widget.success(User(
+            id: 0,
+            firstName: f.text.trim(),
+            lastName: l.text.trim(),
+            username: uname,
+            email: ''));
       }
     } catch (e) {
       msg(e.toString().replaceFirst('Exception: ', ''));
@@ -579,25 +760,24 @@ class _Signup extends State<SignupPage> {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Sign Up'))),
+      appBar: AppBar(
+        title: Text(tr('Sign Up')),
+        leading: IconButton(
+          tooltip: tr('Back'),
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           children: [
             const SizedBox(height: 8),
             Center(
-              child: Container(
-                width: 92,
-                height: 92,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                      colors: [sch.primary, sch.tertiary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: const Icon(Icons.person_add_alt_1,
-                    size: 48, color: Colors.white),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset('assets/images/image.png',
+                    height: 72, fit: BoxFit.contain),
               ),
             ),
             const SizedBox(height: 16),
@@ -606,7 +786,7 @@ class _Signup extends State<SignupPage> {
                 style: const TextStyle(
                     fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            Text(tr('Join Globle Online and start shopping'),
+            Text(tr('Join Global Online and start shopping'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
             const SizedBox(height: 24),
@@ -654,7 +834,23 @@ class _Signup extends State<SignupPage> {
               ],
             ),
             const SizedBox(height: 20),
-            socialButtons(c, widget.success, tr),
+            SocialButtons(
+                onLogin: widget.success,
+                googleLogin: widget.p.repo.googleLogin),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: Text.rich(TextSpan(
+                text: '${tr('Already have an account?')} ',
+                children: [
+                  TextSpan(
+                    text: tr('Sign In'),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: sch.primary),
+                  ),
+                ],
+              )),
+            ),
             const SizedBox(height: 12),
           ],
         ),
@@ -719,27 +915,137 @@ class _Home extends State<HomePage> {
     });
   }
 
+  /// The signed-in user merged with their OWN locally saved profile edits
+  /// (name / photo changed in Edit Profile) so the AppBar stays fresh.
+  User get _user {
+    final saved = AppSettings.savedProfileFor(AppSettings.profileKeyOf(widget.user));
+    if (saved == null) return widget.user;
+    return User(
+        id: widget.user.id,
+        firstName: saved.firstName,
+        lastName: saved.lastName,
+        username: saved.username,
+        email: saved.email,
+        image: saved.image ?? widget.user.image,
+        token: widget.user.token);
+  }
+
+  /// Small avatar for the AppBar: user photo if available, otherwise their
+  /// initial (or a person icon as last resort).
+  Widget _profileAvatar(String Function(String) tr) {
+    final img = userImage(_user.image);
+    final sch = Theme.of(context).colorScheme;
+    final name = _user.fullName.trim();
+    return Tooltip(
+      message: tr('Profile'),
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: sch.primaryContainer,
+        backgroundImage: img,
+        onBackgroundImageError: img == null ? null : (_, __) {},
+        child: img == null
+            ? name.isNotEmpty
+                ? Text(name.characters.first.toUpperCase(),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: sch.onPrimaryContainer))
+                : Icon(Icons.person, size: 18, color: sch.onPrimaryContainer)
+            : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext c) {
     final l10n = AppLocalizations.of(c);
     final tr = l10n.t;
+    final sch = Theme.of(c).colorScheme;
     return Scaffold(
         appBar: AppBar(
-          title: Text(tr('Shop')),
+          title: Semantics(
+            header: true,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset('assets/images/image.png',
+                  height: 32, fit: BoxFit.contain),
+            ),
+          ),
           actions: [
-            IconButton(
+            // Chat Support — compact tonal circle for a cohesive app bar look.
+            IconButton.filledTonal(
+              tooltip: tr('Chat Support'),
               onPressed: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders)))
-                  .then((_) {
-                if (mounted) setState(() {});
-              }),
-              icon: Badge(
-                isLabelVisible: widget.cart.count > 0,
-                label: Text('${widget.cart.count}'),
-                child: const Icon(Icons.shopping_cart),
+                  MaterialPageRoute(builder: (_) => const SupportPage())),
+              iconSize: 20,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.headset_mic_outlined),
+            ),
+            const SizedBox(width: 6),
+            // Cart — tonal circle with a red count badge.
+            Badge(
+              isLabelVisible: widget.cart.count > 0,
+              backgroundColor: sch.error,
+              textColor: sch.onError,
+              textStyle:
+                  const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+              child: IconButton.filledTonal(
+                tooltip: tr('Cart'),
+                onPressed: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders)))
+                    .then((_) {
+                  if (mounted) setState(() {});
+                }),
+                iconSize: 20,
+                visualDensity: VisualDensity.compact,
+                constraints:
+                    const BoxConstraints.tightFor(width: 40, height: 40),
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.shopping_cart_outlined),
+              ),
+            ),
+            // Profile — avatar wrapped in a gradient ring.
+            Padding(
+              padding: const EdgeInsets.only(left: 8, right: 10),
+              child: InkWell(
+                onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => ProfilePage(
+                            user: _user,
+                            ownerKey: AppSettings.profileKeyOf(widget.user),
+                            cart: widget.cart,
+                            fav: widget.fav,
+                            orders: widget.orders,
+                            products: widget.home.products(),
+                            logout: widget.logout)))
+                    .then((_) {
+                  if (mounted) setState(() {});
+                }),
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                        colors: [sch.primary, sch.tertiary]),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle, color: sch.surface),
+                    child: _profileAvatar(tr),
+                  ),
+                ),
               ),
             ),
             PopupMenuButton<String>(
+              tooltip: tr('More'),
+              color: sch.surfaceContainerLow,
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              constraints: const BoxConstraints(minWidth: 190, maxWidth: 240),
               onSelected: (v) {
                 if (v == 'fav') {
                   Navigator.push(c,
@@ -751,11 +1057,13 @@ class _Home extends State<HomePage> {
                 }
                 if (v == 'profile') {
                   Navigator.push(c, MaterialPageRoute(builder: (_) => ProfilePage(
-                      user: widget.user,
+                      user: _user,
+                      ownerKey: AppSettings.profileKeyOf(widget.user),
                       cart: widget.cart,
                       fav: widget.fav,
                       orders: widget.orders,
-                      products: widget.home.products())));
+                      products: widget.home.products(),
+                      logout: widget.logout)));
                 }
                 if (v == 'orders') {
                   Navigator.push(c, MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
@@ -764,17 +1072,48 @@ class _Home extends State<HomePage> {
                   Navigator.push(c,
                       MaterialPageRoute(builder: (_) => SettingsPage(dark: widget.dark, setTheme: widget.setTheme, setLocale: widget.setLocale)));
                 }
+                if (v == 'support') {
+                  Navigator.push(c,
+                      MaterialPageRoute(builder: (_) => const SupportPage()));
+                }
                 if (v == 'logout') widget.logout();
               },
-              itemBuilder: (_) {
-                final tr = AppLocalizations.of(c).t;
+              itemBuilder: (mc) {
+                final tr = AppLocalizations.of(mc).t;
+                final mch = Theme.of(mc).colorScheme;
+                PopupMenuItem<String> item(
+                        String value, IconData icon, String label) =>
+                    PopupMenuItem<String>(
+                      height: 44,
+                      value: value,
+                      child: Row(children: [
+                        Icon(icon, size: 20, color: mch.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        Text(label, style: const TextStyle(fontSize: 14)),
+                      ]),
+                    );
                 return [
-                  PopupMenuItem(value: 'fav', child: Text(tr('Favorites'))),
-                  PopupMenuItem(value: 'cat', child: Text(tr('Categories'))),
-                  PopupMenuItem(value: 'orders', child: Text(tr('Order History'))),
-                  PopupMenuItem(value: 'profile', child: Text(tr('Profile'))),
-                  PopupMenuItem(value: 'settings', child: Text(tr('Settings'))),
-                  PopupMenuItem(value: 'logout', child: Text(tr('Logout'))),
+                  item('fav', Icons.favorite_border, tr('Favorites')),
+                  item('cat', Icons.category_outlined, tr('Categories')),
+                  item('orders', Icons.receipt_long_outlined,
+                      tr('Order History')),
+                  item('support', Icons.chat_bubble_outline, tr('Chat Support')),
+                  item('profile', Icons.person_outline, tr('Profile')),
+                  item('settings', Icons.settings_outlined, tr('Settings')),
+                  const PopupMenuDivider(),
+                  PopupMenuItem<String>(
+                    height: 44,
+                    value: 'logout',
+                    child: Row(children: [
+                      Icon(Icons.logout, size: 20, color: mch.error),
+                      const SizedBox(width: 12),
+                      Text(tr('Logout'),
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: mch.error)),
+                    ]),
+                  ),
                 ];
               },
             ),
@@ -805,20 +1144,6 @@ class _Home extends State<HomePage> {
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide.none),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 52,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: search,
-                      style: FilledButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: const Icon(Icons.search),
                     ),
                   ),
                 ],
@@ -1245,7 +1570,7 @@ class _Cart extends State<CartPage> {
     if (widget.cart.items.isEmpty) return;
     final a = await Navigator.push<Address>(context, MaterialPageRoute(builder: (_) => const AddressPage()));
     if (a == null || !mounted) return;
-    widget.orders.create(widget.cart.items, widget.cart.total, a);
+    widget.orders.create(widget.cart.items, widget.cart.grandTotal, a);
     widget.cart.clear();
     await showDialog(
       context: context,
@@ -1265,55 +1590,335 @@ class _Cart extends State<CartPage> {
   @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
+    final items = widget.cart.items;
     return Scaffold(
-        appBar: AppBar(title: Text(tr('Cart'))),
-        body: widget.cart.items.isEmpty
-            ? Center(child: Text(tr('Your cart is empty')))
-            : Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: widget.cart.items.length,
-                      itemBuilder: (_, i) {
-                        final x = widget.cart.items[i];
-                        return ListTile(
-                          leading: Image.network(x.product.thumbnail, width: 55),
-                          title: Text(x.product.title),
-                          subtitle: Text('\$${x.product.price.toStringAsFixed(2)}'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                  onPressed: () => setState(() => widget.cart.minus(x.product)),
-                                  icon: const Icon(Icons.remove)),
-                              Text('${x.quantity}'),
-                              IconButton(
-                                  onPressed: () => setState(() => widget.cart.add(x.product)),
-                                  icon: const Icon(Icons.add)),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+      appBar: AppBar(
+        title: Text(tr('Cart')),
+        actions: items.isEmpty
+            ? null
+            : [
+                IconButton(
+                  tooltip: tr('Clear cart'),
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: c,
+                      builder: (dc) => AlertDialog(
+                        title: Text(tr('Clear cart?')),
+                        content: Text(tr('Remove all items from your cart?')),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(dc, false),
+                              child: Text(tr('Cancel'))),
+                          FilledButton(
+                              onPressed: () => Navigator.pop(dc, true),
+                              child: Text(tr('Clear'))),
+                        ],
+                      ),
+                    );
+                    if (ok == true && mounted) setState(widget.cart.clear);
+                  },
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                ),
+                const SizedBox(width: 4),
+              ],
+      ),
+      body: items.isEmpty ? _empty(c, tr, sch) : _list(c, tr, sch),
+      bottomNavigationBar:
+          items.isEmpty ? null : _summary(c, tr, sch),
+    );
+  }
+
+  Widget _empty(BuildContext c, String Function(String) tr,
+      ColorScheme sch) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                color: sch.surfaceContainerHighest.withValues(alpha: .6),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.shopping_cart_outlined,
+                  size: 52, color: sch.onSurfaceVariant),
+            ),
+            const SizedBox(height: 22),
+            Text(tr('Your cart is empty'),
+                style: const TextStyle(
+                    fontSize: 19, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(
+              tr('Looks like you have no items in your cart yet.'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: sch.onSurfaceVariant),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(c).maybePop(),
+              icon: const Icon(Icons.storefront_outlined),
+              label: Text(tr('Start shopping')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _itemCard(BuildContext c, String Function(String) tr,
+      ColorScheme sch, CartItem x) {
+    final p = x.product;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: sch.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 82,
+                height: 82,
+                child: Image.network(
+                  p.thumbnail,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: sch.surfaceContainerHighest,
+                    child:
+                        Icon(Icons.image_outlined, color: sch.onSurfaceVariant),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600, height: 1.2)),
+                  const SizedBox(height: 4),
+                  if (p.brand.isNotEmpty || p.category.isNotEmpty)
+                    Row(
                       children: [
-                        Text('${tr('Total')}: \$${widget.cart.total.toStringAsFixed(2)}',
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(onPressed: checkout, child: Text(tr('Checkout'))),
+                        Flexible(
+                          child: Text(
+                            [p.brand, p.category]
+                                .where((s) => s.isNotEmpty)
+                                .join(' • '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12, color: sch.onSurfaceVariant),
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                  const SizedBox(height: 6),
+                  Text('\$${p.price.toStringAsFixed(2)}',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: sch.primary)),
                 ],
               ),
-      );
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
+  Widget _bottomRow(BuildContext c, String Function(String) tr,
+      ColorScheme sch, CartItem x) {
+    final p = x.product;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+      child: Row(
+        children: [
+          _stepper(c, sch, x),
+          const Spacer(),
+          Text('${tr('Subtotal')}: ',
+              style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+          Text('\$${x.subtotal.toStringAsFixed(2)}',
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800)),
+          IconButton(
+            tooltip: tr('Remove'),
+            onPressed: () => setState(() => widget.cart.remove(p)),
+            icon: Icon(Icons.delete_outline, color: sch.error, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepper(BuildContext c, ColorScheme sch, CartItem x) {
+    final p = x.product;
+    Widget btn(IconData icon, VoidCallback onTap) => InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Icon(icon, size: 18),
+          ),
+        );
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: sch.outlineVariant),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn(Icons.remove, () => setState(() => widget.cart.minus(p))),
+          SizedBox(
+            width: 26,
+            child: Text('${x.quantity}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
+          btn(Icons.add, () => setState(() => widget.cart.add(p))),
+        ],
+      ),
+    );
+  }
+
+  Widget _list(BuildContext c, String Function(String) tr, ColorScheme sch) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Row(
+            children: [
+              Text(
+                '${widget.cart.count} ${tr('Items')}',
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text('\$${widget.cart.grandTotal.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: sch.primary)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(top: 6, bottom: 12),
+            itemCount: widget.cart.items.length,
+            itemBuilder: (_, i) {
+              final x = widget.cart.items[i];
+              return Column(
+                children: [
+                  _itemCard(c, tr, sch, x),
+                  _bottomRow(c, tr, sch, x),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _summary(BuildContext c, String Function(String) tr, ColorScheme sch) {
+    final priceStyle = TextStyle(
+        fontSize: 24, fontWeight: FontWeight.w800, color: sch.primary);
+    return Container(
+      decoration: BoxDecoration(
+        color: sch.surface,
+        border: Border(top: BorderSide(color: sch.outlineVariant)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _row(
+                  tr('Subtotal'),
+                  '\$${widget.cart.total.toStringAsFixed(2)}'),
+              const SizedBox(height: 6),
+              _row(
+                  '${tr('Tax')} (${(CartPresenter.taxRate * 100).toStringAsFixed(0)}%)',
+                  '\$${widget.cart.tax.toStringAsFixed(2)}'),
+              const SizedBox(height: 6),
+              _row(tr('Shipping'), tr('Free')),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(tr('Total'),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text(
+                      '\$${widget.cart.grandTotal.toStringAsFixed(2)}',
+                      style: priceStyle),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: checkout,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  icon: const Icon(Icons.lock_outline, size: 18),
+                  label: Text(tr('Checkout')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.green.shade600)),
+        ],
+      );
 }
 
 class AddressPage extends StatefulWidget {
@@ -1875,17 +2480,23 @@ class _Fav extends State<FavoritePage> {
 
 class ProfilePage extends StatefulWidget {
   final User user;
+  /// Stable key of the SIGNED-IN account (computed from the raw session
+  /// user, not the merged one) so profile edits stay attached to this login.
+  final String ownerKey;
   final CartPresenter cart;
   final FavoritePresenter fav;
   final OrderPresenter orders;
   final Future<List<Product>> products;
+  final VoidCallback logout;
   const ProfilePage(
       {super.key,
       required this.user,
+      required this.ownerKey,
       required this.cart,
       required this.fav,
       required this.orders,
-      required this.products});
+      required this.products,
+      required this.logout});
   @override
   State<ProfilePage> createState() => _Profile();
 }
@@ -1897,7 +2508,10 @@ class _Profile extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    final saved = AppSettings.savedProfile;
+    // Only apply edits saved for THIS account (keyed by email/username),
+    // never another account's — that's why a Google login used to show the
+    // previous local account's name.
+    final saved = AppSettings.savedProfileFor(widget.ownerKey);
     user = saved == null
         ? widget.user
         : User(
@@ -1914,7 +2528,9 @@ class _Profile extends State<ProfilePage> {
   Future<void> _edit() async {
     final edited = await Navigator.push<User>(
       context,
-      MaterialPageRoute(builder: (_) => EditProfilePage(user: user)),
+      MaterialPageRoute(
+          builder: (_) => EditProfilePage(
+              user: user, ownerKey: widget.ownerKey)),
     );
     if (edited != null && mounted) setState(() => user = edited);
   }
@@ -1939,6 +2555,11 @@ class _Profile extends State<ProfilePage> {
         MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
   }
 
+  void _openSupport() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const SupportPage()));
+  }
+
   Future<void> _openAddress() async {
     final saved = await Navigator.push<Address>(
       context,
@@ -1949,6 +2570,47 @@ class _Profile extends State<ProfilePage> {
       await AppSettings.saveAddress(saved);
       setState(() {});
     }
+  }
+
+  void _openPassword() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => ChangePasswordPage(user: user)));
+  }
+
+  void _openAbout() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const AboutUsPage()));
+  }
+
+  void _openContact() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const ContactUsPage()));
+  }
+
+  void _openFaq() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const FaqPage()));
+  }
+
+  void _openTerms() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const TermsConditionsPage()));
+  }
+
+  void _openPrivacy() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()));
+  }
+
+  void _openDeleteAccount() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => DeleteAccountPage(
+            user: user,
+            loginUsername: widget.user.username,
+            ownerKey: widget.ownerKey,
+            orders: widget.orders,
+            cart: widget.cart,
+            fav: widget.fav,
+            onDeleted: widget.logout)));
   }
 
   Widget _stat(BuildContext c, IconData icon, int n, String label,
@@ -2270,9 +2932,44 @@ class _Profile extends State<ProfilePage> {
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
                       _action(c, Icons.location_on_outlined, tr('My Address'), _openAddress),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.chat_bubble_outline, tr('Chat Support'), _openSupport),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
                       _action(c, Icons.edit_outlined, tr('Edit Profile'), _edit),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.lock_reset_outlined, tr('Change Password'), _openPassword),
                     ],
                   ),
+                ),
+                const SizedBox(height: 14),
+                Card(
+                  elevation: 0,
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: sch.outlineVariant)),
+                  child: Column(
+                    children: [
+                      _action(c, Icons.info_outline, tr('About Us'), _openAbout),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.contact_phone_outlined, tr('Contact Us'), _openContact),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.help_outline, tr('FAQs'), _openFaq),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.description_outlined, tr('Terms & Conditions'), _openTerms),
+                      Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                      _action(c, Icons.privacy_tip_outlined, tr('Privacy Policy'), _openPrivacy),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Card(
+                  elevation: 0,
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: sch.errorContainer)),
+                  color: sch.errorContainer.withValues(alpha: 0.35),
+                  child: _action(c, Icons.delete_forever_outlined, tr('Delete Account'), _openDeleteAccount),
                 ),
               ],
             ),
@@ -2285,7 +2982,10 @@ class _Profile extends State<ProfilePage> {
 
 class EditProfilePage extends StatefulWidget {
   final User user;
-  const EditProfilePage({super.key, required this.user});
+  /// Key of the account this profile belongs to (email/username based), so
+  /// edits are stored per account and never leak into another login.
+  final String ownerKey;
+  const EditProfilePage({super.key, required this.user, required this.ownerKey});
   @override
   State<EditProfilePage> createState() => _EditProfile();
 }
@@ -2405,7 +3105,7 @@ class _EditProfile extends State<EditProfilePage> {
             ? 'b64:$_b64'
             : (_url.isNotEmpty ? _url : widget.user.image),
         token: widget.user.token);
-    await AppSettings.saveProfile(u);
+    await AppSettings.saveProfile(u, forKey: widget.ownerKey);
     if (mounted) Navigator.pop(context, u);
   }
 
@@ -2627,12 +3327,29 @@ class _Settings extends State<SettingsPage> {
               trailing: const Icon(Icons.arrow_drop_down),
               onTap: () => _chooseLanguage(c),
             ),
-            const AboutListTile(
-                applicationName: 'Globle Online', applicationVersion: '1.0.0'),
+            const Divider(),
+            ListTile(
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset('assets/images/image.png',
+                    height: 28, fit: BoxFit.contain),
+              ),
+              title: const Text('Global Online'),
+              subtitle: const Text('Version 1.0.0'),
+            ),
           ],
         ),
       );
   }
+}
+
+/// Backwards-compatible alias — the full chat experience now lives in
+/// [ChatSupportPage] (chat_support_page.dart), which supports text, images,
+/// videos and voice messages.
+class SupportPage extends StatelessWidget {
+  const SupportPage({super.key});
+  @override
+  Widget build(BuildContext c) => const ChatSupportPage();
 }
 
 class OrderPage extends StatelessWidget {

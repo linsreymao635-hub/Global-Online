@@ -9,6 +9,8 @@ class LoginPresenter {
       throw Exception('Username and password are required');
     return repo.login(u.trim(), p);
   }
+
+  Future<User?> googleLogin() => repo.googleLogin();
 }
 
 class SignupPresenter {
@@ -47,8 +49,11 @@ class CategoryPresenter {
 
 class CartPresenter {
   final List<CartItem> items = [];
+  static const double taxRate = 0.10;
   int get count => items.fold(0, (s, i) => s + i.quantity);
   double get total => items.fold(0, (s, i) => s + i.subtotal);
+  double get tax => total * taxRate;
+  double get grandTotal => total + tax;
   void add(Product p) {
     final i = items.indexWhere((x) => x.product.id == p.id);
     if (i < 0)
@@ -66,6 +71,8 @@ class CartPresenter {
       items.removeAt(i);
   }
 
+  void remove(Product p) => items.removeWhere((x) => x.product.id == p.id);
+
   void clear() => items.clear();
 }
 
@@ -79,6 +86,10 @@ class FavoritePresenter {
 
 class OrderPresenter {
   final List<Order> orders = [];
+
+  /// True while any order is still being processed ('pending').
+  /// Used to block account deletion until those orders are settled.
+  bool get hasPending => orders.any((o) => o.status == 'Processing');
   void create(List<CartItem> items, double total, Address a) {
     orders.insert(
         0,

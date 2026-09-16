@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/app_localizations.dart';
 import 'services/api_service.dart';
 import 'services/app_settings.dart';
+import 'services/google_auth_service.dart';
 import 'repositories/repositories.dart';
 import 'presenters/presenters.dart';
 import 'models/models.dart';
@@ -25,8 +26,11 @@ class ShopApp extends StatefulWidget {
 }
 
 class _ShopAppState extends State<ShopApp> {
+  // The Navigator lives inside MaterialApp, so this key lets us navigate
+  // from handlers defined above it (login/signup callbacks).
+  final _navKey = GlobalKey<NavigatorState>();
   User? user;
-  bool signup = false, dark = false;
+  bool dark = false;
   Locale? locale;
   final cart = CartPresenter(),
       fav = FavoritePresenter(),
@@ -38,6 +42,9 @@ class _ShopAppState extends State<ShopApp> {
 
   void logout() {
     AppSettings.clearSession();
+    // Also disconnect Google so the next "Continue with Google" shows the
+    // account picker again instead of silently reusing the previous account.
+    GoogleAuthService().signOut().catchError((_) {});
     setState(() => user = null);
   }
 
@@ -65,6 +72,7 @@ class _ShopAppState extends State<ShopApp> {
   @override
   Widget build(BuildContext c) => MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navKey,
       locale: locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const [
@@ -80,12 +88,18 @@ class _ShopAppState extends State<ShopApp> {
           brightness: Brightness.dark,
           colorSchemeSeed: Colors.blue),
       home: user == null
-          ? (signup
-              ? SignupPage(p: SignupPresenter(widget.auth), success: login)
-              : LoginPage(
-                  p: LoginPresenter(widget.auth),
-                  success: login,
-                  signup: () => setState(() => signup = true)))
+          ? LoginPage(
+              p: LoginPresenter(widget.auth),
+              success: login,
+              signup: () => _navKey.currentState!.push(MaterialPageRoute(
+                  builder: (_) => SignupPage(
+                      p: SignupPresenter(widget.auth),
+                      success: (u) {
+                        // Close Sign Up first so no stale route stays on the
+                        // stack when the app swaps to HomePage.
+                        _navKey.currentState!.pop();
+                        login(u);
+                      }))))
           : HomePage(
               user: user!,
               home: HomePresenter(widget.products),

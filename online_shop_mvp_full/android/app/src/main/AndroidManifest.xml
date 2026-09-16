@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Microphone access for voice messages in Chat Support. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
-        android:label="Globle Online"
+        android:label="Global Online"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Use the legacy image_picker implementation (ACTION_GET_CONTENT)
