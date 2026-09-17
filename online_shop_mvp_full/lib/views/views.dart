@@ -15,10 +15,12 @@ import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import 'chat_support_page.dart';
 import 'info_pages.dart';
+import 'admin_panel.dart';
 import '../presenters/presenters.dart';
 import '../repositories/repositories.dart';
 import '../services/api_service.dart';
 import '../services/app_settings.dart';
+import '../services/supabase_service.dart';
 import '../services/telegram_auth_service.dart';
 
 /// A lightweight local account so the user can browse and order products
@@ -57,14 +59,17 @@ class _SocialButtonsState extends State<SocialButtons> {
       if (!mounted) return;
       // null = the user closed the picker without choosing.
       if (u == null) return;
-      // Real Google account selected → go straight to the shop.
+      // The authenticated Google account IS the logged-in user — its name,
+      // email and photo must be exactly what the Profile shows. Never swap it
+      // for a fabricated/default user when something fails after this point.
       widget.onLogin(u);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      // Google couldn't complete on this device (missing Android client ID
-      // etc.) — silently enter the shop as a guest so the user is never
-      // stuck on the sign-in page.
-      widget.onLogin(guestUser());
+      // A failed Google sign-in must NOT log the user in as a different
+      // (guest) account, otherwise Login info and Profile info diverge.
+      // Surface the actual error and let the user retry.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', ''))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -539,126 +544,268 @@ class _Login extends State<LoginPage> {
     }
   }
 
-  Widget field(TextEditingController c, String t, IconData icon) => TextField(
-        controller: c,
+  // Outlined, focus-aware field style (replaces the old flat grey boxes:
+  // now there is a visible border, a subtle fill and a colored focus ring).
+  Widget field(BuildContext c, TextEditingController ctrl, String t,
+      IconData icon,
+      {bool obscure = false, Widget? suffix}) =>
+      TextField(
+        controller: ctrl,
+        obscureText: obscure,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           labelText: t,
           prefixIcon: Icon(icon),
+          suffixIcon: suffix,
           filled: true,
+          fillColor: Theme.of(c).colorScheme.surfaceContainerLowest,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(16),
+              borderSide:
+                  BorderSide(color: Theme.of(c).colorScheme.outlineVariant)),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide:
+                  BorderSide(color: Theme.of(c).colorScheme.outlineVariant)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                  color: Theme.of(c).colorScheme.primary, width: 1.6)),
         ),
       );
 
-  @override
-  Widget build(BuildContext c) {
-    final tr = AppLocalizations.of(c).t;
-    final sch = Theme.of(c).colorScheme;
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+  /// Brand hero shown next to the form on wide screens (desktop/web).
+  Widget _heroPane(BuildContext c, String Function(String) tr) {
+    Widget feature(IconData icon, String label) => Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ]);
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF16337F), Color(0xFF2456C8), Color(0xFF3B82F6)],
+        ),
+      ),
+      // Decorative glow rings in the corners give the pane depth.
+      child: Stack(children: [
+        Positioned(
+            top: -70,
+            right: -70,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.10),
+                    width: 26),
+              ),
+            )),
+        Positioned(
+            bottom: -50,
+            left: -50,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 22),
+              ),
+            )),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 36),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+            // Logo centered on top of the brand pane.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14)),
+              child: Image.asset('assets/images/image.png',
+                  height: 40, fit: BoxFit.contain),
+            ),
+            const Spacer(),
+            Text(tr('Welcome to Global Online'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2)),
+            const SizedBox(height: 10),
+            Text(tr('Sign in to continue shopping'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 15)),
+            const SizedBox(height: 30),
+            // Feature rows centered as a group (fixed width so the text
+            // lines up while the whole block sits in the middle).
+            SizedBox(
+                width: 290,
+                child: feature(Icons.local_offer_outlined,
+                    tr('Best prices & daily deals'))),
+            const SizedBox(height: 14),
+            SizedBox(
+                width: 290,
+                child: feature(Icons.local_shipping_outlined,
+                    tr('Fast delivery to your door'))),
+            const SizedBox(height: 14),
+            SizedBox(
+                width: 290,
+                child: feature(Icons.verified_user_outlined,
+                    tr('Secure payments & easy returns'))),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  /// The login form, centered — shared by the wide and narrow layouts.
+  Widget _formPane(
+      BuildContext c, String Function(String) tr, ColorScheme sch, bool wide) {
+    return Center(
+      child: SingleChildScrollView(
+        padding:
+            EdgeInsets.symmetric(horizontal: wide ? 48 : 24, vertical: 32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24),
-              // Full logo on a card — BoxFit.contain so the wide banner is
-              // never cropped (a fixed 96x96 cover box showed only the middle).
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: sch.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: sch.outlineVariant),
-                    boxShadow: [
-                      BoxShadow(
-                        color: sch.shadow.withValues(alpha: 0.08),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!wide) ...[
+                  // Small logo card on phones — BoxFit.contain so the wide
+                  // banner is never cropped.
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: sch.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: sch.outlineVariant),
+                        boxShadow: [
+                          BoxShadow(
+                            color: sch.shadow.withValues(alpha: 0.08),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Image.asset('assets/images/image.png',
+                          height: 72, fit: BoxFit.contain),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                Text(tr('Welcome to Global Online'),
+                    style: const TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text(tr('Sign in to continue shopping'),
+                    style: TextStyle(
+                        fontSize: 14, color: sch.onSurfaceVariant)),
+                const SizedBox(height: 28),
+                // One field for everyone: customers sign in with their
+                // username, the admin signs in with the admin phone number.
+                field(c, u, tr('Phone number or Username'),
+                    Icons.phone_android),
+                const SizedBox(height: 16),
+                field(c, p, tr('Password'), Icons.lock_outline,
+                    obscure: !show,
+                    suffix: IconButton(
+                      icon: Icon(show
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      onPressed: () => setState(() => show = !show),
+                    )),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                    onPressed: () => Navigator.push(
+                        c,
+                        MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordPage())),
+                    child: Text(tr('Forgot Password?')),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Gradient primary button — stands out more than flat blue.
+                SizedBox(
+                  height: 54,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: const LinearGradient(colors: [
+                        Color(0xFF2456C8),
+                        Color(0xFF3B82F6)
+                      ]),
+                    ),
+                    child: FilledButton(
+                      onPressed: busy ? null : go,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                      child: busy
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2.5, color: Colors.white))
+                          : Text(tr('Sign In')),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: widget.signup,
+                  child: Text.rich(TextSpan(
+                    text: '${tr('New to Global Online?')} ',
+                    children: [
+                      TextSpan(
+                        text: tr('Create Account'),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: sch.primary),
                       ),
                     ],
-                  ),
-                  child: Image.asset('assets/images/image.png',
-                      height: 96, fit: BoxFit.contain),
+                  )),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(tr('Sign in to continue shopping'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 14, color: sch.onSurfaceVariant)),
-              const SizedBox(height: 32),
-              field(u, tr('Username'), Icons.person_outline),
-              const SizedBox(height: 14),
-              TextField(
-                controller: p,
-                obscureText: !show,
-                style: const TextStyle(fontSize: 16),
-                decoration: InputDecoration(
-                  labelText: tr('Password'),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  filled: true,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none),
-                  suffixIcon: IconButton(
-                    icon: Icon(show ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => show = !show),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.push(
-                      c,
-                      MaterialPageRoute(
-                          builder: (_) => const ForgotPasswordPage())),
-                  child: Text(tr('Forgot Password?')),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 52,
-                child: FilledButton(
-                  onPressed: busy ? null : go,
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    textStyle: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  child: busy
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2.5, color: Colors.white))
-                      : Text(tr('Sign In')),
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextButton(
-                onPressed: widget.signup,
-                child: Text.rich(TextSpan(
-                  text: '${tr('New to Global Online?')} ',
-                  children: [
-                    TextSpan(
-                      text: tr('Create Account'),
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700, color: sch.primary),
-                    ),
-                  ],
-                )),
-              ),
-              const SizedBox(height: 4),
-              const SizedBox(height: 18),
-              Row(
-                children: [
+                const SizedBox(height: 20),
+                Row(children: [
                   const Expanded(child: Divider()),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -666,16 +813,97 @@ class _Login extends State<LoginPage> {
                         style: TextStyle(color: sch.onSurfaceVariant)),
                   ),
                   const Expanded(child: Divider()),
+                ]),
+                const SizedBox(height: 18),
+                SocialButtons(
+                    onLogin: widget.success,
+                    googleLogin: widget.p.googleLogin),
+                // The admin account is desktop-only: on phones there is no
+                // admin login hint at all. Hidden entirely in the user-only
+                // frontend.
+                if (ApiService.isAdminDevice) ...[
+                  const SizedBox(height: 18),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      u.text = ApiService.adminPhone;
+                      p.text = ApiService.adminPassword;
+                      setState(() {});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: sch.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: sch.outlineVariant),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.admin_panel_settings_outlined,
+                            size: 16, color: sch.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tr(
+                                'Admin login (computer only): 066778213 / admin123'),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: sch.onSurfaceVariant),
+                          ),
+                        ),
+                        Icon(Icons.keyboard_arrow_right,
+                            size: 14, color: sch.onSurfaceVariant),
+                      ]),
+                    ),
+                  ),
                 ],
-              ),
-              const SizedBox(height: 20),
-              SocialButtons(
-                  onLogin: widget.success, googleLogin: widget.p.googleLogin),
-              const SizedBox(height: 12),
-            ],
-          ),
+              ]),
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
+    return Scaffold(
+      backgroundColor: sch.surface,
+      body: LayoutBuilder(builder: (c, box) {
+        final wide = box.maxWidth >= 900;
+        if (wide) {
+          // Desktop/web: floating card — the gradient brand pane and the
+          // form sit side by side, lifted off the background by a soft
+          // shadow, with rounded corners all around.
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
+              constraints: const BoxConstraints(maxWidth: 1080),
+              decoration: BoxDecoration(
+                color: sch.surface,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: sch.outlineVariant),
+                boxShadow: [
+                  BoxShadow(
+                    color: sch.shadow.withValues(alpha: 0.12),
+                    blurRadius: 40,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Row(children: [
+                Expanded(child: _heroPane(c, tr)),
+                Expanded(child: _formPane(c, tr, sch, true)),
+              ]),
+            ),
+          );
+        }
+        // Phone: single centered column with the logo card on top.
+        return SafeArea(
+          child: _formPane(c, tr, sch, false),
+        );
+      }),
     );
   }
 }
@@ -691,6 +919,7 @@ class SignupPage extends StatefulWidget {
 class _Signup extends State<SignupPage> {
   final f = TextEditingController();
   final l = TextEditingController();
+  final em = TextEditingController();
   final e = TextEditingController();
   final p = TextEditingController();
   final cp = TextEditingController();
@@ -707,7 +936,8 @@ class _Signup extends State<SignupPage> {
     setState(() => busy = true);
     try {
       final x = await widget.p.signup(
-          f: f.text, l: l.text, u: uname, p: p.text, c: cp.text, e: e.text);
+          f: f.text, l: l.text, u: uname, p: p.text, c: cp.text,
+          e: em.text, ph: e.text);
       // Remember the account on this device so it can actually sign in
       // later (the demo API cannot authenticate newly created users).
       await AppSettings.saveLocalAccount(
@@ -715,6 +945,7 @@ class _Signup extends State<SignupPage> {
           password: p.text,
           firstName: f.text.trim(),
           lastName: l.text.trim(),
+          email: em.text.trim(),
           phone: e.text.trim());
       if (x != null) {
         widget.success(x);
@@ -726,10 +957,11 @@ class _Signup extends State<SignupPage> {
             firstName: f.text.trim(),
             lastName: l.text.trim(),
             username: uname,
-            email: ''));
+            email: em.text.trim(),
+            phone: e.text.trim()));
       }
-    } catch (e) {
-      msg(e.toString().replaceFirst('Exception: ', ''));
+    } catch (e2) {
+      msg(e2.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -795,6 +1027,8 @@ class _Signup extends State<SignupPage> {
             field(l, tr('Last name'), Icons.person_outline),
             const SizedBox(height: 12),
             field(e, tr('Phone'), Icons.phone_android),
+            const SizedBox(height: 12),
+            field(em, tr('Email'), Icons.mail_outline),
             const SizedBox(height: 12),
             field(p, tr('Password'), Icons.lock_outline,
                 s: !show, trailing: eye()),
@@ -926,6 +1160,7 @@ class _Home extends State<HomePage> {
         lastName: saved.lastName,
         username: saved.username,
         email: saved.email,
+        phone: saved.phone.isNotEmpty ? saved.phone : widget.user.phone,
         image: saved.image ?? widget.user.image,
         token: widget.user.token);
   }
@@ -994,7 +1229,7 @@ class _Home extends State<HomePage> {
               child: IconButton.filledTonal(
                 tooltip: tr('Cart'),
                 onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders)))
+                        MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders, owner: widget.user.username)))
                     .then((_) {
                   if (mounted) setState(() {});
                 }),
@@ -1018,7 +1253,10 @@ class _Home extends State<HomePage> {
                             fav: widget.fav,
                             orders: widget.orders,
                             products: widget.home.products(),
-                            logout: widget.logout)))
+                            logout: widget.logout,
+                            admin: widget.user.isAdmin
+                                ? AdminRepository(widget.home.repo.api)
+                                : null)))
                     .then((_) {
                   if (mounted) setState(() {});
                 }),
@@ -1063,10 +1301,24 @@ class _Home extends State<HomePage> {
                       fav: widget.fav,
                       orders: widget.orders,
                       products: widget.home.products(),
-                      logout: widget.logout)));
+                      logout: widget.logout,
+                      admin: widget.user.isAdmin
+                          ? AdminRepository(widget.home.repo.api)
+                          : null)));
                 }
                 if (v == 'orders') {
                   Navigator.push(c, MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
+                }
+                if (v == 'admin') {
+                  // Admin panel is desktop-only (never opens on phones).
+                  if (!ApiService.isAdminDevice) return;
+                  Navigator.push(c, MaterialPageRoute(builder: (_) => AdminPanelPage(
+                      admin: widget.user,
+                      repo: AdminRepository(widget.home.repo.api),
+                      orders: widget.orders,
+                      onLogout: widget.logout))).then((_) {
+                    if (mounted) setState(() {});
+                  });
                 }
                 if (v == 'settings') {
                   Navigator.push(c,
@@ -1075,6 +1327,10 @@ class _Home extends State<HomePage> {
                 if (v == 'support') {
                   Navigator.push(c,
                       MaterialPageRoute(builder: (_) => const SupportPage()));
+                }
+                if (v == 'feedback') {
+                  Navigator.push(c, MaterialPageRoute(
+                      builder: (_) => FeedbackPage(user: _user)));
                 }
                 if (v == 'logout') widget.logout();
               },
@@ -1098,7 +1354,13 @@ class _Home extends State<HomePage> {
                   item('orders', Icons.receipt_long_outlined,
                       tr('Order History')),
                   item('support', Icons.chat_bubble_outline, tr('Chat Support')),
+                  item('feedback', Icons.rate_review_outlined, tr('Feedback')),
                   item('profile', Icons.person_outline, tr('Profile')),
+                  // Admin panel entry only exists on the computer, never on
+                  // phones, and never in the user-only frontend.
+                  if (widget.user.isAdmin && ApiService.isAdminDevice)
+                    item('admin', Icons.admin_panel_settings_outlined,
+                        tr('Admin Panel')),
                   item('settings', Icons.settings_outlined, tr('Settings')),
                   const PopupMenuDivider(),
                   PopupMenuItem<String>(
@@ -1560,7 +1822,15 @@ class _Product extends State<ProductPage> {
 class CartPage extends StatefulWidget {
   final CartPresenter cart;
   final OrderPresenter orders;
-  const CartPage({super.key, required this.cart, required this.orders});
+
+  /// Username of the buyer, attached to the created order so the Admin
+  /// panel can show who ordered what.
+  final String owner;
+  const CartPage(
+      {super.key,
+      required this.cart,
+      required this.orders,
+      this.owner = ''});
   @override
   State<CartPage> createState() => _Cart();
 }
@@ -1570,7 +1840,8 @@ class _Cart extends State<CartPage> {
     if (widget.cart.items.isEmpty) return;
     final a = await Navigator.push<Address>(context, MaterialPageRoute(builder: (_) => const AddressPage()));
     if (a == null || !mounted) return;
-    widget.orders.create(widget.cart.items, widget.cart.grandTotal, a);
+    widget.orders.create(widget.cart.items, widget.cart.grandTotal, a,
+        owner: widget.owner);
     widget.cart.clear();
     await showDialog(
       context: context,
@@ -2488,6 +2759,10 @@ class ProfilePage extends StatefulWidget {
   final OrderPresenter orders;
   final Future<List<Product>> products;
   final VoidCallback logout;
+
+  /// Non-null when the signed-in user is an admin, which unlocks the
+  /// Admin panel entry on this page.
+  final AdminRepository? admin;
   const ProfilePage(
       {super.key,
       required this.user,
@@ -2496,7 +2771,8 @@ class ProfilePage extends StatefulWidget {
       required this.fav,
       required this.orders,
       required this.products,
-      required this.logout});
+      required this.logout,
+      this.admin});
   @override
   State<ProfilePage> createState() => _Profile();
 }
@@ -2520,8 +2796,10 @@ class _Profile extends State<ProfilePage> {
             lastName: saved.lastName,
             username: saved.username,
             email: saved.email,
+            phone: saved.phone.isNotEmpty ? saved.phone : widget.user.phone,
             image: saved.image ?? widget.user.image,
-            token: widget.user.token);
+            token: widget.user.token,
+            isAdmin: widget.user.isAdmin);
     _imgFailed = false;
   }
 
@@ -2537,7 +2815,7 @@ class _Profile extends State<ProfilePage> {
 
   void _openCart() {
     Navigator.push(context,
-            MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders)))
+            MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders, owner: widget.user.username)))
         .then((_) => mounted ? setState(() {}) : null);
   }
 
@@ -2553,6 +2831,21 @@ class _Profile extends State<ProfilePage> {
   void _openOrders() {
     Navigator.push(context,
         MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
+  }
+
+  void _openAdmin() {
+    final repo = widget.admin;
+    if (repo == null) return;
+    // Admin panel is desktop-only (never opens on phones).
+    if (!ApiService.isAdminDevice) return;
+    Navigator.push(context,
+            MaterialPageRoute(
+                builder: (_) => AdminPanelPage(
+                    admin: user,
+                    repo: repo,
+                    orders: widget.orders,
+                    onLogout: widget.logout)))
+        .then((_) => mounted ? setState(() {}) : null);
   }
 
   void _openSupport() {
@@ -2675,46 +2968,10 @@ class _Profile extends State<ProfilePage> {
       ),
       body: ListView(
         children: [
-          Container(
-            width: double.infinity,
+          Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [sch.primary, sch.tertiary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(28)),
-            ),
-            child: Stack(
+            child: Row(
               children: [
-                Positioned(
-                  right: -40,
-                  top: -30,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: -30,
-                  bottom: -50,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                ),
-                Row(
-                  children: [
                     SizedBox(
                       width: 112,
                       height: 112,
@@ -2776,63 +3033,84 @@ class _Profile extends State<ProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(user.fullName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                shadows: [
-                                  Shadow(
-                                      color: Colors.black.withOpacity(0.25),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2)),
+Text(user.fullName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: sch.onSurface,
+                                )),
+                          const SizedBox(height: 8),
+Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: sch.secondaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text('@${user.username}',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: sch.onSecondaryContainer)),
+                            ),
+                          const SizedBox(height: 8),
+if (user.email.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: sch.secondaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.email_outlined,
+                                      size: 15, color: sch.onSecondaryContainer),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(user.email,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: sch.onSecondaryContainer)),
+                                  ),
                                 ],
-                              )),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(999),
+                              ),
                             ),
-                            child: Text('@${user.username}',
-                                style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(12),
+                          ],
+                          if (user.phone.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: sch.secondaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.phone_outlined,
+                                      size: 15, color: sch.onSecondaryContainer),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(user.phone,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: sch.onSecondaryContainer)),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.email_outlined,
-                                    size: 15, color: Colors.white),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(user.email,
-                                      style: const TextStyle(
-                                          fontSize: 13, color: Colors.white)),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
-                  ],
-                ),
-          ],
-        ),
+],
+              ),
       ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
@@ -2937,6 +3215,12 @@ class _Profile extends State<ProfilePage> {
                       _action(c, Icons.edit_outlined, tr('Edit Profile'), _edit),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
                       _action(c, Icons.lock_reset_outlined, tr('Change Password'), _openPassword),
+                      // Admin panel entry only exists on the computer.
+                      if (widget.admin != null && ApiService.isAdminDevice) ...[
+                        Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                        _action(c, Icons.admin_panel_settings_outlined,
+                            tr('Admin Panel'), _openAdmin),
+                      ],
                     ],
                   ),
                 ),
@@ -3000,12 +3284,14 @@ class _EditProfile extends State<EditProfilePage> {
       TextEditingController(text: widget.user.username);
   late final TextEditingController email =
       TextEditingController(text: widget.user.email);
+  late final TextEditingController phone =
+      TextEditingController(text: widget.user.phone);
   String _url = '';
   String? _b64;
 
   @override
   void dispose() {
-    for (final c in [first, last, name, email]) {
+    for (final c in [first, last, name, email, phone]) {
       c.dispose();
     }
     super.dispose();
@@ -3101,10 +3387,12 @@ class _EditProfile extends State<EditProfilePage> {
         lastName: last.text.trim(),
         username: name.text.trim(),
         email: email.text.trim(),
+        phone: phone.text.trim(),
         image: _b64 != null
             ? 'b64:$_b64'
             : (_url.isNotEmpty ? _url : widget.user.image),
-        token: widget.user.token);
+        token: widget.user.token,
+        isAdmin: widget.user.isAdmin);
     await AppSettings.saveProfile(u, forKey: widget.ownerKey);
     if (mounted) Navigator.pop(context, u);
   }
@@ -3170,6 +3458,8 @@ class _EditProfile extends State<EditProfilePage> {
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) =>
                     v != null && v.contains('@') ? null : ' '),
+            _field(c, phone, tr('Phone'), Icons.phone_outlined,
+                keyboardType: TextInputType.phone),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _save,
@@ -3281,20 +3571,82 @@ class _Settings extends State<SettingsPage> {
               widget.setLocale(const Locale('en'));
             },
           ),
-          ListTile(
-            leading: Icon(
-                l.locale.languageCode == 'km'
-                    ? Icons.check_circle
-                    : Icons.circle_outlined),
-            title: const Text('ភាសាខ្មែរ'),
-            onTap: () {
-              Navigator.pop(c);
-              widget.setLocale(const Locale('km'));
-            },
-          ),
+ListTile(
+              leading: Icon(
+                  l.locale.languageCode == 'km'
+                      ? Icons.check_circle
+                      : Icons.circle_outlined),
+              title: Text('ភាសាខ្មែរ'),
+              onTap: () {
+                Navigator.pop(c);
+                widget.setLocale(const Locale('km'));
+              },
+            ),
+          ],
+        ),
+    );
+  }
+
+  Future<void> _configureGoogle(
+      BuildContext c, AppLocalizations l) async {
+    final serverCtl = TextEditingController(text: AppSettings.googleClientId);
+    final androidCtl =
+        TextEditingController(text: AppSettings.googleAndroidClientId);
+    final saved = await showDialog<bool>(
+      context: c,
+      builder: (dc) => AlertDialog(
+        title: Text(l.t('Enter client IDs')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: serverCtl,
+              decoration: InputDecoration(
+                labelText: l.t('Web client ID'),
+                hintText: 'xxx.apps.googleusercontent.com',
+                helperText:
+                    l.t('Paste your Google Cloud OAuth Web client ID here '
+                        '(ends with .apps.googleusercontent.com)'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: androidCtl,
+              decoration: InputDecoration(
+                labelText: l.t('Android client ID (optional)'),
+                hintText: 'xxx.apps.googleusercontent.com',
+                helperText:
+                    l.t('Usually not needed on Android here'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dc, false),
+              child: Text(l.t('Cancel'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(dc, true),
+              child: Text(l.t('Save'))),
         ],
       ),
     );
+    if (saved == true) {
+      final serverId = serverCtl.text.trim();
+      final androidId = androidCtl.text.trim();
+      if (serverId != AppSettings.googleClientId) {
+        await AppSettings.saveGoogleClientId(serverId);
+      }
+      if (androidId != AppSettings.googleAndroidClientId) {
+        await AppSettings.saveGoogleAndroidClientId(androidId);
+      }
+      if (c.mounted) {
+        ScaffoldMessenger.of(c).showSnackBar(SnackBar(
+            content: Text(l.t('Google client ID saved'))));
+      }
+    }
+    serverCtl.dispose();
+    androidCtl.dispose();
   }
 
   @override
@@ -3326,6 +3678,16 @@ class _Settings extends State<SettingsPage> {
                   : l.t('English')),
               trailing: const Icon(Icons.arrow_drop_down),
               onTap: () => _chooseLanguage(c),
+            ),
+            ListTile(
+              leading: const Icon(Icons.g_mobiledata, color: Colors.blue),
+              title: Text(l.t('Google Sign-In')),
+              subtitle: Text((AppSettings.googleClientId.isNotEmpty ||
+                      AppSettings.googleAndroidClientId.isNotEmpty)
+                  ? l.t('Configured')
+                  : l.t('Not configured')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _configureGoogle(c, l),
             ),
             const Divider(),
             ListTile(
@@ -3496,9 +3858,162 @@ class OrderPage extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
+),
           );
         },
+      ),
+    );
+  }
+}
+
+class FeedbackPage extends StatefulWidget {
+  /// The signed-in account (guest accounts send feedback as "Guest").
+  final User user;
+  const FeedbackPage({super.key, required this.user});
+
+  @override
+  State<FeedbackPage> createState() => _FeedbackPageState();
+}
+
+class _FeedbackPageState extends State<FeedbackPage> {
+  final _message = TextEditingController();
+  int _rating = 5;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  Widget _star(int n, Color color) => IconButton(
+        onPressed: () => setState(() => _rating = n),
+        icon: Icon(n <= _rating ? Icons.star : Icons.star_border,
+            color: n <= _rating ? color : Colors.grey.shade400),
+        iconSize: 34,
+        visualDensity: VisualDensity.compact,
+        tooltip: '$n',
+      );
+
+  Future<void> _send() async {
+    final tr = AppLocalizations.of(context).t;
+    if (_message.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Please enter your message'))));
+      return;
+    }
+    setState(() => _sending = true);
+    final ok = await SupabaseService.instance.addFeedback(FeedbackItem(
+        id: 0,
+        owner: widget.user.username,
+        name: widget.user.fullName,
+        message: _message.text.trim(),
+        rating: _rating));
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Thanks for your feedback!'))));
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              tr('Could not send feedback. Please try again.'))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final tr = AppLocalizations.of(c).t;
+    final sch = Theme.of(c).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(tr('Feedback'))),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Header card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF5B4FE9), Color(0xFF9C6ADE)]),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.rate_review_outlined,
+                    color: Colors.white, size: 30),
+                const SizedBox(height: 10),
+                Text(tr('Share your feedback'),
+                    style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white)),
+                const SizedBox(height: 4),
+                Text(tr('Help us improve your shopping experience.'),
+                    style: const TextStyle(
+                        fontSize: 13, color: Colors.white70)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(tr('Your rating'),
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Row(children: [
+            _star(1, Colors.amber),
+            _star(2, Colors.amber),
+            _star(3, Colors.amber),
+            _star(4, Colors.amber),
+            _star(5, Colors.amber),
+            const SizedBox(width: 8),
+            Text('$_rating/5',
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 20),
+          Text(tr('Your message'),
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _message,
+            minLines: 4,
+            maxLines: 8,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: tr('Write your feedback here...'),
+              alignLabelWithHint: true,
+              filled: true,
+              fillColor: sch.surfaceContainerLow,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: _sending ? null : _send,
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF5B4FE9),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16)),
+            icon: _sending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send, size: 18),
+            label: Text(tr('Submit Feedback')),
+          ),
+        ],
       ),
     );
   }

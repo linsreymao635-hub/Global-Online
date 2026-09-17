@@ -83,8 +83,10 @@ class AppSettings {
             lastName: m['lastName'] ?? '',
             username: m['username'] ?? '',
             email: m['email'] ?? '',
+            phone: m['phone'] ?? '',
             image: m['image'],
-            token: m['token']);
+            token: m['token'],
+            isAdmin: m['isAdmin'] == true || m['isAdmin'] == 'true');
       } catch (_) {
         restoredUser = null;
       }
@@ -165,8 +167,10 @@ class AppSettings {
           'lastName': u.lastName,
           'username': u.username,
           'email': u.email,
+          'phone': u.phone,
           'image': u.image,
           'token': u.token,
+          'isAdmin': u.isAdmin,
         }));
   }
 
@@ -242,6 +246,7 @@ class AppSettings {
         lastName: m['lastName'] ?? '',
         username: m['username']!,
         email: m['email'] ?? '',
+        phone: m['phone'] ?? '',
         image: (m['image'] ?? '').isEmpty ? null : m['image']);
   }
 
@@ -347,15 +352,16 @@ class AppSettings {
         ? forKey
         : profileKeyOf(u);
     _profiles[key] = {
-      'firstName': u.firstName,
-      'lastName': u.lastName,
-      'username': u.username,
-      'email': u.email,
-      'image': u.image ?? '',
-    };
-    final p = await SharedPreferences.getInstance();
-    await p.setString('${_pf}map', jsonEncode(_profiles));
-  }
+'firstName': u.firstName,
+        'lastName': u.lastName,
+        'username': u.username,
+        'email': u.email,
+        'phone': u.phone,
+        'image': u.image ?? '',
+      };
+      final p = await SharedPreferences.getInstance();
+      await p.setString('${_pf}map', jsonEncode(_profiles));
+    }
 
   static Future<void> saveGoogleClientId(String id) async {
     _googleClientId = id.trim();
@@ -384,5 +390,74 @@ class AppSettings {
     final list = p.getStringList(_feedbackKey) ?? <String>[];
     list.add(value);
     await p.setStringList(_feedbackKey, list);
+  }
+
+  static const _ordersKey = 'all_orders_v1';
+
+  /// All orders placed on this device, shared across accounts so the
+  /// Admin panel can manage them. Persisted so order history (and the
+  /// admin's order management) survives an app restart.
+  static Future<List<Order>> loadAllOrders() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_ordersKey);
+    if (raw == null) return [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list.map((e) {
+        final m = (e as Map).cast<String, dynamic>();
+        final entries = (m['items'] as List? ?? const [])
+            .map((it) => CartItem(
+                product: Product.fromJson(
+                    ((it as Map)['product'] as Map).cast<String, dynamic>()),
+                quantity: (it['quantity'] as num?)?.toInt() ?? 1))
+            .toList();
+        return Order(
+            id: m['id']?.toString() ?? '',
+            date: DateTime.tryParse(m['date']?.toString() ?? '') ??
+                DateTime.now(),
+            items: entries,
+            total: (m['total'] as num?)?.toDouble() ?? 0,
+            status: m['status']?.toString() ?? 'Processing',
+            deliveryAddress: m['address']?.toString() ?? '',
+            owner: m['owner']?.toString() ?? '');
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveAllOrders(List<Order> orders) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(
+        _ordersKey,
+        jsonEncode(orders.map((o) {
+          Map<String, dynamic> productJson(Product x) => {
+                'id': x.id,
+                'title': x.title,
+                'price': x.price,
+                'discountPercentage': x.discountPercentage,
+                'rating': x.rating,
+                'stock': x.stock,
+                'brand': x.brand,
+                'category': x.category,
+                'description': x.description,
+                'thumbnail': x.thumbnail,
+                'images': x.images,
+              };
+          return {
+            'id': o.id,
+            'date': o.date.toIso8601String(),
+            'items': o.items
+                .map((it) => {
+                      'quantity': it.quantity,
+                      'product': productJson(it.product),
+                    })
+                .toList(),
+            'total': o.total,
+            'status': o.status,
+            'address': o.deliveryAddress,
+            'owner': o.owner,
+          };
+        }).toList()));
   }
 }

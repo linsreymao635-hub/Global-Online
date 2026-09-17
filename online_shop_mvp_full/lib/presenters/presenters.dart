@@ -1,5 +1,7 @@
 import '../models/models.dart';
 import '../repositories/repositories.dart';
+import '../services/app_settings.dart';
+import '../services/supabase_service.dart';
 
 class LoginPresenter {
   final AuthRepository repo;
@@ -22,12 +24,14 @@ class SignupPresenter {
       required String u,
       required String p,
       required String c,
-      required String e}) {
-    if ([f, l, u, p, e].any((x) => x.trim().isEmpty))
+      required String e,
+      required String ph}) {
+    if ([f, l, u, p, e, ph].any((x) => x.trim().isEmpty))
       throw Exception('Please fill in all fields');
     if (p != c) throw Exception('Passwords do not match');
     if (p.length < 6) throw Exception('Password must be at least 6 characters');
-    return repo.signup(f.trim(), l.trim(), u.trim(), p, e.trim());
+    if (!e.contains('@')) throw Exception('Please enter a valid email address');
+    return repo.signup(f.trim(), l.trim(), u.trim(), p, e.trim(), ph.trim());
   }
 }
 
@@ -90,17 +94,47 @@ class OrderPresenter {
   /// True while any order is still being processed ('pending').
   /// Used to block account deletion until those orders are settled.
   bool get hasPending => orders.any((o) => o.status == 'Processing');
-  void create(List<CartItem> items, double total, Address a) {
-    orders.insert(
-        0,
-        Order(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            date: DateTime.now(),
-            items: items
-                .map((x) => CartItem(product: x.product, quantity: x.quantity))
-                .toList(),
-            total: total,
-            status: 'Processing',
-            deliveryAddress: '${a.address}, ${a.city}, ${a.country}'));
+
+  /// Restore orders: cloud first (shared across devices/admin), merged with
+  /// any device-only orders (e.g. created while offline).
+  Future<void> load() async {
+    orders.clear();
+    final cloud = await SupabaseService.instance.orders();
+    final local = await AppSettings.loadAllOrders();
+    final seen = <String>{};
+    for (final o in [...cloud, ...local]) {
+      if (seen.add(o.id)) orders.add(o);
+    }
+  }
+
+  Future<void> create(List<CartItem> items, double total, Address a,
+      {String owner = ''}) async {
+    final order = Order(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        date: DateTime.now(),
+        items: items
+            .map((x) => CartItem(product: x.product, quantity: x.quantity))
+            .toList(),
+        total: total,
+        status: 'Processing',
+        deliveryAddress: '${a.address}, ${a.city}, ${a.country}',
+        owner: owner);
+    orders.insert(0, order);
+    await AppSettings.saveAllOrders(orders);
+    // Push to the shared cloud so the Admin panel (any device) sees it.
+    await SupabaseService.instance.saveOrder(order);
+  }
+
+  /// Update the status of an order (used by the Admin panel) — locally and
+  /// in the shared cloud.
+  Future<void> setStatus(String id, String status) async {
+    for (var i = 0; i < orders.length; i++) {
+      if (orders[i].id == id && orders[i].status != status) {
+        orders[i] = orders[i].copyWith(status: status);
+        break;
+      }
+    }
+    await AppSettings.saveAllOrders(orders);
+    await SupabaseService.instance.updateOrderStatus(id, status);
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/models.dart';
@@ -69,18 +70,48 @@ class GoogleAuthService {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return null;
       }
+      // DEVELOPER_ERROR surfaces as "[28444] Developer console is not set up
+      // correctly" — the running app (package name + keystore SHA-1) is not
+      // recognized in the Google Cloud project that owns the Web client used
+      // as the ID-token audience. Explain the fix instead of showing the raw
+      // code, and echo the exact serverClientId in use so it can be
+      // cross-checked against console.cloud.google.com.
+      final desc = e.description ?? '';
+      if (e.code == GoogleSignInExceptionCode.unknownError &&
+          (desc.contains('28444') || desc.contains('Developer console'))) {
+        final msg =
+            'Google Sign-In setup incomplete: this app is not registered in '
+            'the Google Cloud project of the Web client it is using ('
+            'serverClientId: $_serverClientId). In console.cloud.google.com → '
+            'APIs & Services → Credentials, create an OAuth client ID of type '
+            '"Android" with package name com.example.online_shop_mvp_full and '
+            'the keystore SHA-1 fingerprint of the INSTALLED build, inside the '
+            'SAME project as that Web client. Google can take a few minutes '
+            'after you save it before a new build is accepted.';
+        debugPrint(msg);
+        throw StateError(msg);
+      }
       rethrow;
     }
+    final email = acct.email.trim().toLowerCase();
+    final localPart = email.isEmpty ? '' : email.split('@').first;
     final name = (acct.displayName ?? '').trim();
-    final parts = name.isEmpty ? const <String>[] : name.split(RegExp(r'\s+'));
-    final first = parts.isEmpty ? '' : parts.first;
+    // Display name can be empty on some accounts. Fall back to the email
+    // local-part so the profile always shows the same identity the account
+    // picker presented, instead of a blank/unknown name.
+    final parts = name.isEmpty
+        ? (localPart.isEmpty
+            ? const <String>[]
+            : localPart.split(RegExp(r'[._\-]+')))
+        : name.split(RegExp(r'\s+'));
+    final first = parts.isEmpty ? localPart : parts.first;
     final last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
     return User(
       id: 0,
       firstName: first,
       lastName: last,
-      username: acct.email.split('@').first,
-      email: acct.email,
+      username: localPart,
+      email: email,
       image: acct.photoUrl,
       token: acct.authentication.idToken,
     );
