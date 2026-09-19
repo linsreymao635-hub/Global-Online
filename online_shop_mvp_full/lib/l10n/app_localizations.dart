@@ -478,12 +478,18 @@ class AppLocalizations {
     'e.g. Beauty & Skincare': 'ឧ. អាយភាព និងការថែសម្បក់',
     'Short description of this category': 'ការពិពណ៌នាខ្លីអំពីប្រភេទនេះ',
     'Short description of this product': 'ការពិពណ៌នាខ្លីអំពីផលិតផលនេះ',
-    'Create a new company for the catalog':
-        'បង្កើតក្រុមហ៊ុនថ្មីសម្រាប់កាតាឡុក',
-    'Update the company details':
-        'ធ្វើបច្ចុប្បន្នភាពព័ត៌មានក្រុមហ៊ុន',
-    'Add Company': 'បន្ថែមក្រុមហ៊ុន',
-    'Edit Company': 'កែសម្រួលក្រុមហ៊ុន',
+    'Short description of this shop':
+        'ការពិពណ៌នាខ្លីអំពីហាងនេះ',
+    'Create a new shop for the catalog':
+        'បង្កើតហាងថ្មីសម្រាប់កាតាឡុក',
+    'Update the shop details':
+        'ធ្វើបច្ចុប្បន្នភាពព័ត៌មានហាង',
+    'Add Shop': 'បន្ថែមហាង',
+    'Edit Shop': 'កែសម្រួលហាង',
+    'Create a new product for the catalog':
+        'បង្កើតផលិតផលថ្មីសម្រាប់កាតាឡុក',
+    'Update the product details':
+        'ធ្វើបច្ចុប្បន្នភាពព័ត៌មានផលិតផល',
     'e.g. Essence': 'ឧ. Essence',
     'Only the name is required — the rest is optional.':
         'ត្រូវការត្រឹមឈ្មោះប៉ុណ្ណោះ — ដទៃទៀតស្រេចចិត្ត។',
@@ -549,22 +555,21 @@ class AppLocalizations {
     'Users': 'អ្នកប្រើប្រាស់',
     'Revenue': 'ចំណូល',
     'Order ID': 'លេខបញ្ជាទិញ',
-    'Companies': 'ក្រុមហ៊ុន',
+    'Shops': 'ហាង',
     'Dashboard': 'ផ្ទាំងព័ត៌មាន',
     'Reports': 'របាយការណ៍',
     'Administration': 'ការគ្រប់គ្រងប្រព័ន្ធ',
-    'Company': 'ក្រុមហ៊ុន',
     'Location': 'ទីតាំង',
     'Website': 'គេហទំព័រ',
     'Verified': 'បានផ្ទៀងផ្ទាត់',
     'Unverified': 'មិនទាន់ផ្ទៀងផ្ទាត់',
     'Active': 'សកម្ម',
-    'Search companies...': 'ស្វែងរកក្រុមហ៊ុន...',
+    'Search shops...': 'ស្វែងរកហាង...',
     'Search categories...': 'ស្វែងរកប្រភេទ...',
     'Search products...': 'ស្វែងរកផលិតផល...',
     'Search users...': 'ស្វែងរកអ្នកប្រើប្រាស់...',
     'Search orders...': 'ស្វែងរកការបញ្ជាទិញ...',
-    'New Company': 'ក្រុមហ៊ុនថ្មី',
+    'New Shop': 'ហាងថ្មី',
     'New Product': 'ផលិតផលថ្មី',
     'Are you sure?': 'តើអ្នកប្រាកដទេ?',
     'No connection': 'គ្មានការតភ្ជាប់',
@@ -586,6 +591,7 @@ class AppLocalizations {
     'Shipped': 'បានដឹកជញ្ជូន',
     'Delivered': 'បានដល់ដៃ',
     'Cancelled': 'បានលុបចោល',
+    'Could not reach the cloud. Status not saved.': 'មិនអាចភ្ជាប់ទៅ Cloud បានទេ។ ស្ថានភាពមិនត្រូវបានរក្សាទុកទេ។',
     'paid orders': 'ការបញ្ជាទិញដែលបានបង់ប្រាក់',
     'pending': 'កំពុងរង់ចាំ',
     'admins': 'អ្នកគ្រប់គ្រង',
@@ -615,8 +621,35 @@ class AppLocalizations {
     'Product added': 'ផលិតផលត្រូវបានបន្ថែម',
     'Product updated': 'ផលិតផលត្រូវបានអាប់ដេត',
     'Product deleted': 'ផលិតផលត្រូវបានលុប',
+    'Shop added': 'ហាងត្រូវបានបន្ថែម',
+    'Changes saved': 'ការផ្លាស់ប្តូរត្រូវបានរក្សាទុក',
     'Category added': 'ប្រភេទត្រូវបានបន្ថែម',
     'New feedback received': 'មានមតិយោបល់ថ្មី',
+    'New user signed in': 'មានអ្នកប្រើប្រាស់ថ្មីចូល',
+    'New order received': 'មានការបញ្ជាទិញថ្មី',
+    'Your account has been deleted': 'គណនីរបស់អ្នកត្រូវបានលុប',
+    // ---- Chat Support bot ----
+    'Hello! 👋 How can I help you today? You can ask about your order, shipping, returns, payments — anything.':
+        'សួស្តី! 👋 តើខ្ញុំអាចជួយអ្វីបានដែរ? អ្នកអាចសួរអំពីការបញ្ជាទិញ ការដឹកជញ្ជូន ការត្រឡប់មកវិញ ការទូទាត់ — អ្វីក៏បាន។',
+    'You are very welcome! Anything else I can help with?':
+        'មិនអីទេ! តើមានអ្វីទៀតដែលខ្ញុំអាចជួយបានទេ?',
+    'Thanks for chatting with Global Online support. Have a great day! 👋':
+        'អរគុណដែលបានជជែកជាមួយការគាំទ្ររបស់ Global Online។ សូមឱ្យមានថ្ងៃដ៏ល្អ! 👋',
+    'Great! Let me know if you need anything else. 😊':
+        'ល្អហើយ! ប្រាប់ខ្ញុំបានបើអ្នកត្រូវការអ្វីទៀត។ 😊',
+    'Sorry, I did not quite catch that. I can help with orders, shipping, returns, payments, your account and more — could you rephrase, or pick one of those topics?':
+        'សុំទោស ខ្ញុំមិនសូវច្បាស់ទេ។ ខ្ញុំអាចជួយអំពីការបញ្ជាទិញ ការដឹកជញ្ជូន ការត្រឡប់មកវិញ ការទូទាត់ គណនីរបស់អ្នក និងច្រើនទៀត — តើអ្នកអាចសរសេរឡើងវិញ ឬជ្រើសរើសប្រធានបទទាំងនោះបានទេ?',
+    'Sure — more about that: ': 'បាទ/ចាស — ព័ត៌មានបន្ថែម៖ ',
+    'Related:': 'ដែលទាក់ទង៖',
+    'Discounts and promo codes': 'ការបញ្ចុះតម្លៃ និងកូដពិសេស',
+    'Account and password': 'គណនី និងពាក្យសម្ងាត់',
+    'Contact us': 'ទាក់ទងយើង',
+    'Products and stock': 'ផលិតផល និងស្តុក',
+    'Using the app': 'ការប្រើប្រាស់កម្មវិធី',
+    // ---- Chat history persistence ----
+    'Clear chat': 'ជម្រះការជជែក',
+    'This deletes the whole conversation on this device. Continue?':
+        'នេះនឹងលុបការជជែកទាំងមូលនៅលើឧបករណ៍នេះ។ បន្ត?',
     'Category deleted': 'ប្រភេទត្រូវបានលុប',
     'User deleted': 'អ្នកប្រើប្រាស់ត្រូវបានលុប',
     'Cannot delete the built-in admin account':

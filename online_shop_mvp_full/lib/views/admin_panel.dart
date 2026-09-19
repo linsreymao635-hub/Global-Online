@@ -62,11 +62,26 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   Timer? _feedbackPoll;
   bool _loadingFeedback = false;
 
+  // Live users: the same push+poll pattern as feedback, for the Users
+  // table. A Supabase realtime subscription fires the moment a shopper
+  // signs up / signs in (a new row in the shared cloud directory) and the
+  // periodic timer quietly re-fetches every 20s as a fallback, so a new
+  // user appears on the Users page instantly — even while the admin is
+  // already looking at that page.
+  Timer? _usersPoll;
+  bool _loadingUsers = false;
+
+  // Live orders: the same push+poll pattern, so a NEW order placed by a
+  // shopper (a new row in the shared `orders` table) appears on the
+  // Orders page instantly — even while the admin is already looking at
+  // it. The realtime subscription fires on insert (new order) and update
+  // (status change); the periodic timer quietly re-fetches every 20s as
+  // a fallback when realtime is unavailable.
+  Timer? _ordersPoll;
+  bool _loadingOrders = false;
+
   // Live filters for the searchable tables.
   String _search = '';
-
-  // Orders page quick-filter (All / Processing / Shipped / ...).
-  String _orderStatusFilter = 'All';
 
   @override
   void initState() {
@@ -77,13 +92,31 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     // Fallback: quietly refresh feedback every 20 seconds.
     _feedbackPoll = Timer.periodic(
         const Duration(seconds: 20), (_) => _onLiveFeedback());
+    // Live Users table: realtime insert events + the same 20s poll
+    // fallback, so signups/sign-ins show up without leaving the page.
+    widget.repo.supa.watchUsers(
+        onInsert: _onLiveUsers,
+        onDelete: (_) => _onLiveUsers());
+    _usersPoll = Timer.periodic(
+        const Duration(seconds: 20), (_) => _onLiveUsers());
+    // Live Orders table: realtime insert (new order) + update (status
+    // change) events + the same 20s poll fallback, so a shopper's new
+    // order appears on the Orders page without the admin leaving it.
+    widget.repo.supa.watchOrders(
+        onInsert: _onLiveOrders, onChanged: _onLiveOrders);
+    _ordersPoll = Timer.periodic(
+        const Duration(seconds: 20), (_) => _onLiveOrders());
   }
 
   @override
   void dispose() {
     _clearEditedTimer?.cancel();
     _feedbackPoll?.cancel();
+    _usersPoll?.cancel();
+    _ordersPoll?.cancel();
     widget.repo.supa.cancelFeedbackWatch();
+    widget.repo.supa.cancelUsersWatch();
+    widget.repo.supa.cancelOrdersWatch();
     super.dispose();
   }
 
@@ -104,6 +137,55 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       // Offline — keep showing the current list.
     } finally {
       _loadingFeedback = false;
+    }
+  }
+
+  /// The user list may have changed (new signup/sign-in pushed by realtime
+  /// or picked up by the 20s poll, or an account deleted on another
+  /// device): quietly refetch ONLY users so the page never flickers.
+  Future<void> _onLiveUsers() async {
+    if (_loadingUsers || !mounted) return;
+    _loadingUsers = true;
+    try {
+      final users = await widget.repo.users();
+      if (!mounted) return;
+      // Toast only when the list actually GREW from a known non-empty
+      // state — avoids a false "new user" on the very first fetch.
+      final grew = _users.isNotEmpty && users.length > _users.length;
+      setState(() => _users = users);
+      if (grew && _page != 'users') {
+        _toast(AppLocalizations.of(context).t('New user signed in'));
+      }
+    } catch (_) {
+      // Offline — keep showing the current list.
+    } finally {
+      _loadingUsers = false;
+    }
+  }
+
+  /// The order list may have changed (a shopper placed a NEW order, pushed
+  /// by realtime or picked up by the 20s poll, or an order's status was
+  /// changed on another device): quietly refetch ONLY orders so the page
+  /// never flickers and existing rows are never duplicated (the whole
+  /// list is replaced with the freshest cloud data, newest first).
+  Future<void> _onLiveOrders() async {
+    if (_loadingOrders || !mounted) return;
+    _loadingOrders = true;
+    try {
+      final orders = await widget.repo.orders();
+      if (!mounted) return;
+      // Toast only when the list actually GREW from a known non-empty
+      // state — avoids a false "new order" on the very first fetch or
+      // when a status changed (that is an update, not a new order).
+      final grew = _orders.isNotEmpty && orders.length > _orders.length;
+      setState(() => _orders = orders);
+      if (grew && _page != 'orders') {
+        _toast(AppLocalizations.of(context).t('New order received'));
+      }
+    } catch (_) {
+      // Offline — keep showing the current list.
+    } finally {
+      _loadingOrders = false;
     }
   }
 
@@ -152,6 +234,31 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       if (!mounted) return;
       setState(() => _cats = cats);
     } catch (_) {}
+  }
+
+  /// Refetch only the products in the background (no spinner) after the
+  /// admin saves a product/company edit — the row is already updated
+  /// locally, this just reconciles with Supabase / other devices.
+  Future<void> _refreshProducts() async {
+    try {
+      final products = await widget.repo.products();
+      if (!mounted) return;
+      setState(() => _products = products);
+    } catch (_) {}
+  }
+
+  /// Apply a saved product/company to the in-memory list immediately so the
+  /// edit is visible the moment the dialog closes (before any network
+  /// refresh). New rows are pinned to the top.
+  void _applySavedProduct(Product saved) {
+    setState(() {
+      final i = _products.indexWhere((x) => x.id == saved.id);
+      if (i >= 0) {
+        _products[i] = saved;
+      } else {
+        _products.insert(0, saved);
+      }
+    });
   }
 
   // ------------------------------------------------------------- navigation
@@ -261,7 +368,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
             _sideItem(Icons.dashboard_outlined, tr('Dashboard'), 'dashboard',
                 chevron: true),
             _sideItem(
-                Icons.storefront_outlined, tr('Companies'), 'companies'),
+                Icons.storefront_outlined, tr('Shops'), 'companies'),
             _sideItem(
                 Icons.category_outlined, tr('Categories'), 'categories'),
             _sideItem(
@@ -817,11 +924,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   }
 
   List<Order> get _filteredOrders {
-    var list = _orders;
-    // Status quick-filter chips above the table (All / Processing / ...).
-    if (_orderStatusFilter != 'All') {
-      list = list.where((o) => o.status == _orderStatusFilter).toList();
-    }
+    final list = _orders;
     if (_search.isEmpty) return list;
     final q = _search.toLowerCase();
     return list
@@ -910,11 +1013,6 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                 allOrders: _orders,
                 total: _filteredOrders.length,
                 page: _orderPage,
-                statusFilter: _orderStatusFilter,
-                onFilter: (s) => setState(() {
-                      _orderStatusFilter = s;
-                      _orderPage = 0;
-                    }),
                 onPage: (p) => setState(() => _orderPage = p),
                 onSearch: (v) => setState(() {
                       _search = v;
@@ -1381,25 +1479,45 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   // ------------------------------------------------------------ actions
 
   Future<void> _editProduct([Product? p]) async {
-    final done = await showDialog<bool>(
+    final tr = AppLocalizations.of(context).t;
+    final saved = await showDialog<Product?>(
       context: context,
       barrierDismissible: false,
       builder: (_) =>
           AdminProductEditDialog(repo: widget.repo, existing: p),
     );
-    if (done == true) _reload();
+    if (saved == null) return;
+    _toast(p == null ? tr('Product added') : tr('Changes saved'));
+    // Show the edit instantly, then persist (local-first) and reconcile
+    // with the cloud in the background so the Save never blocks the UI.
+    _applySavedProduct(saved);
+    unawaited((p == null
+            ? widget.repo.add(saved)
+            : widget.repo.update(saved))
+        .then((_) => _refreshProducts())
+        .catchError((_) {}));
   }
 
-  /// Add / Edit from the Companies page: same product rows, but shown and
-  /// edited as companies (Company, Location, Website, Verified, Status...).
+  /// Add / Edit from the Shops page: same product rows, but shown and
+  /// edited as shops (Shop, Location, Website, Verified, Status...).
   Future<void> _editCompany([Product? p]) async {
-    final done = await showDialog<bool>(
+    final tr = AppLocalizations.of(context).t;
+    final saved = await showDialog<Product?>(
       context: context,
       barrierDismissible: false,
       builder: (_) =>
           AdminCompanyEditDialog(repo: widget.repo, existing: p),
     );
-    if (done == true) _reload();
+    if (saved == null) return;
+    _toast(p == null ? tr('Shop added') : tr('Changes saved'));
+    // Show the edit instantly, then persist (local-first) and reconcile
+    // with the cloud in the background so the Save never blocks the UI.
+    _applySavedProduct(saved);
+    unawaited((p == null
+            ? widget.repo.add(saved)
+            : widget.repo.update(saved))
+        .then((_) => _refreshProducts())
+        .catchError((_) {}));
   }
 
   Future<void> _deleteProduct(Product p) async {
@@ -1506,14 +1624,23 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final ok = await _confirm('${tr('Delete')} "@${u.username}"?');
     if (ok != true) return;
     await widget.repo.deleteUser(u.username);
+    // Drop the account from the in-memory list right away (no spinner),
+    // then quietly reconcile with the cloud — the shopper's app is told
+    // through the cloud delete (realtime / poll) to sign out by itself.
+    setState(() => _users.removeWhere((x) => x.username == u.username));
     _toast(tr('User deleted'));
-    _reload();
+    _onLiveUsers();
   }
 
   Future<void> _changeStatus(Order o, String status) async {
-    await widget.repo.setOrderStatus(o.id, status);
+    final tr = AppLocalizations.of(context).t;
+    final ok = await widget.repo.setOrderStatus(o.id, status);
     await widget.orders.setStatus(o.id, status);
-    _toast(AppLocalizations.of(context).t('Order status updated'));
+    if (!ok) {
+      _toast(tr('Could not reach the cloud. Status not saved.'));
+    } else {
+      _toast(tr('Order status updated'));
+    }
     _reload();
   }
 
@@ -2057,7 +2184,7 @@ class Pill extends StatelessWidget {
 }
 
 // ============================================================================
-// Companies page (brand/product catalog presented like the mock's table)
+// Shops page (brand/product catalog presented like the mock's table)
 // ============================================================================
 
 class CompaniesTablePage extends StatelessWidget {
@@ -2094,20 +2221,19 @@ class CompaniesTablePage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
           Expanded(
-              flex: 3, child: CellText(tr('Company'), header: true)),
+              flex: 4, child: CellText(tr('Shop'), header: true)),
           Expanded(
               flex: 3, child: CellText(tr('Location'), header: true)),
           Expanded(
-              flex: 3, child: CellText(tr('Website'), header: true)),
+              flex: 4, child: CellText(tr('Website'), header: true)),
           Expanded(
               flex: 2, child: CellText(tr('Verified'), header: true)),
           Expanded(
               flex: 2, child: CellText(tr('Status'), header: true)),
-          Expanded(flex: 1, child: CellText(tr('Stock'), header: true)),
           Expanded(
-              flex: 2, child: CellText(tr('Price'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Actions'), header: true)),
+              flex: 2,
+              child: Center(
+                  child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Product p) {
@@ -2118,7 +2244,7 @@ class CompaniesTablePage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(children: [
               Expanded(
-                  flex: 3,
+                  flex: 4,
                   child: Row(children: [
                     Container(
                         width: 30,
@@ -2141,8 +2267,12 @@ class CompaniesTablePage extends StatelessWidget {
                                     sch.onPrimaryContainer))),
                     const SizedBox(width: 10),
                     Expanded(
-                        child: CellText(name,
-                            color: const Color(0xFF5B4FE9))),
+                        child: Tooltip(
+                          message: p.description.isNotEmpty
+                              ? p.description
+                              : name,
+                          child: CellText(name,
+                              color: const Color(0xFF5B4FE9)))),
                   ])),
               Expanded(
                   flex: 3,
@@ -2150,7 +2280,7 @@ class CompaniesTablePage extends StatelessWidget {
                       ? '—'
                       : p.category)),
               Expanded(
-                  flex: 3,
+                  flex: 4,
                   child: CellText(p.thumbnail.isEmpty
                       ? '—'
                       : p.thumbnail,
@@ -2170,16 +2300,12 @@ class CompaniesTablePage extends StatelessWidget {
                       color: p.status == 'Inactive'
                           ? Colors.grey
                           : Colors.green)),
-              Expanded(flex: 1, child: CellText('${p.stock}')),
-              Expanded(
-                  flex: 2,
-                  child: CellText(
-                      '\$${p.price.toStringAsFixed(2)}')),
-              // Edit / Delete actions for this company row.
+              // Edit / Delete actions for this shop row (centered so the
+              // Actions header sits directly above both buttons).
               Expanded(
                   flex: 2,
                   child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
                           tooltip: tr('Edit'),
@@ -2188,6 +2314,7 @@ class CompaniesTablePage extends StatelessWidget {
                           icon: const Icon(Icons.edit_outlined,
                               size: 19, color: Color(0xFF5B4FE9)),
                         ),
+                        const SizedBox(width: 6),
                         IconButton(
                           tooltip: tr('Delete'),
                           visualDensity: VisualDensity.compact,
@@ -2201,9 +2328,9 @@ class CompaniesTablePage extends StatelessWidget {
     }
 
     return AdminTableScaffold(
-      searchHint: tr('Search companies...'),
+      searchHint: tr('Search shops...'),
       onSearch: onSearch,
-      actionLabel: tr('New Company'),
+      actionLabel: tr('New Shop'),
       onAction: onAdd,
       page: page,
       totalPages: totalPages,
@@ -2258,7 +2385,10 @@ class CategoriesTablePage extends StatelessWidget {
           Expanded(flex: 2, child: CellText('Slug', header: true)),
           Expanded(flex: 4, child: CellText(tr('Description'), header: true)),
           Expanded(flex: 3, child: CellText('URL', header: true)),
-          const Expanded(flex: 1, child: SizedBox()),
+          Expanded(
+              flex: 2,
+              child: Center(
+                  child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Category cat) {
@@ -2315,23 +2445,26 @@ class CategoriesTablePage extends StatelessWidget {
                   cat.description.isEmpty ? '—' : cat.description,
                   maxLines: 2)),
           Expanded(flex: 3, child: CellText(cat.url)),
+          // Edit / Delete actions for this category row (centered so the
+          // Actions header sits directly above both buttons).
           Expanded(
-              flex: 1,
-              child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+              flex: 2,
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                     IconButton(
                         tooltip: tr('Edit'),
                         onPressed: () => onEdit(cat),
                         icon: const Icon(Icons.edit_outlined,
                             size: 20, color: Color(0xFF5B4FE9))),
+                    const SizedBox(width: 6),
                     IconButton(
                         tooltip: tr('Delete'),
                         onPressed: () => onDelete(cat),
                         icon: const Icon(Icons.delete_outline,
                             size: 20,
                             color: Colors.redAccent)),
-                  ]))),
+                  ])),
         ]),
       );
     }
@@ -2400,7 +2533,10 @@ class ProductsTablePage extends StatelessWidget {
               flex: 1, child: CellText(tr('Stock'), header: true)),
           Expanded(
               flex: 2, child: CellText(tr('Rating'), header: true)),
-          const Expanded(flex: 2, child: SizedBox()),
+          Expanded(
+              flex: 2,
+              child: Center(
+                  child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Product p) => InkWell(
@@ -2437,11 +2573,12 @@ class ProductsTablePage extends StatelessWidget {
                       const SizedBox(width: 4),
                       CellText(p.rating.toStringAsFixed(1)),
                     ])),
-                // Edit / Delete actions for this product row.
+                // Edit / Delete actions for this product row (centered so the
+                // Actions header sits directly above both buttons).
                 Expanded(
                     flex: 2,
                     child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           IconButton(
                             tooltip: tr('Edit'),
@@ -2450,6 +2587,7 @@ class ProductsTablePage extends StatelessWidget {
                             icon: const Icon(Icons.edit_outlined,
                                 size: 19, color: Color(0xFF5B4FE9)),
                           ),
+                          const SizedBox(width: 6),
                           IconButton(
                             tooltip: tr('Delete'),
                             visualDensity: VisualDensity.compact,
@@ -2520,7 +2658,10 @@ class UsersTablePage extends StatelessWidget {
           Expanded(
               flex: 2, child: CellText(tr('Phone'), header: true)),
           Expanded(flex: 2, child: CellText('Role', header: true)),
-          const Expanded(flex: 1, child: SizedBox()),
+          Expanded(
+              flex: 1,
+              child: Center(
+                  child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(User u) {
@@ -2579,7 +2720,7 @@ class UsersTablePage extends StatelessWidget {
               Expanded(
                   flex: 1,
                   child: Align(
-                      alignment: Alignment.centerRight,
+                      alignment: Alignment.center,
                       child: isAdmin
                           ? const SizedBox()
                           : IconButton(
@@ -2685,12 +2826,10 @@ class UserDetailPage extends StatelessWidget {
 class OrdersTablePage extends StatelessWidget {
   final List<Order> orders;
 
-  /// Unfiltered list — used for the summary cards and filter chips.
+  /// Unfiltered list — used for the summary cards.
   final List<Order> allOrders;
   final int total;
   final int page;
-  final String statusFilter;
-  final ValueChanged<String> onFilter;
   final ValueChanged<int> onPage;
   final ValueChanged<String> onSearch;
   final void Function(Order) onOpen;
@@ -2701,8 +2840,6 @@ class OrdersTablePage extends StatelessWidget {
       required this.allOrders,
       required this.total,
       required this.page,
-      required this.statusFilter,
-      required this.onFilter,
       required this.onPage,
       required this.onSearch,
       required this.onOpen,
@@ -2756,7 +2893,16 @@ class OrdersTablePage extends StatelessWidget {
         (orders.length / perPage).ceil().clamp(1, 1 << 30);
     final slice =
         orders.skip(page * perPage).take(perPage).toList();
-    const statuses = ['Processing', 'Shipped', 'Delivered', 'Cancelled'];
+    // Known statuses, plus any status already present in the data so the
+    // DropdownButton always has an item matching each order (otherwise it
+    // asserts with "There should be exactly one item" and blanks the page).
+    final statuses = {
+      'Processing',
+      'Shipped',
+      'Delivered',
+      'Cancelled',
+      ...allOrders.map((o) => o.status),
+    }.toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2810,54 +2956,6 @@ class OrdersTablePage extends StatelessWidget {
 
     final revenue = allOrders.fold<double>(
         0, (sum, o) => sum + (o.status == 'Cancelled' ? 0 : o.total));
-
-    // --------------------------------------------- status filter chips
-    Widget chip(String label, int count) {
-      final selected = statusFilter == label;
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => onFilter(label),
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-                color: selected ? const Color(0xFF5B4FE9) : sch.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: selected
-                        ? const Color(0xFF5B4FE9)
-                        : sch.outlineVariant)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: selected
-                          ? Colors.white
-                          : sch.onSurfaceVariant)),
-              const SizedBox(width: 6),
-              Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 1),
-                  decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : sch.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Text('$count',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: selected
-                              ? Colors.white
-                              : sch.onSurfaceVariant))),
-            ]),
-          ),
-        ),
-      );
-    }
 
     Widget row(Order o) {
       final date = o.date.toLocal().toString();
@@ -2980,44 +3078,52 @@ class OrdersTablePage extends StatelessWidget {
       );
     }
 
-    return ListView(padding: const EdgeInsets.all(20), children: [
+    // NOTE: AdminTableScaffold is itself a vertical ListView, so it must
+    // NOT be nested inside another unbounded vertical scrollable (that
+    // throws "Vertical viewport was given unbounded height"). The summary
+    // cards and filter chips stay pinned on top; the table scrolls below.
+    return Column(children: [
       // ------------------------------------------- summary cards row
-      Row(children: [
-        statCard(tr('Total Orders'), '${allOrders.length}',
-            Icons.receipt_long_outlined, const Color(0xFF5B4FE9)),
-        const SizedBox(width: 12),
-        statCard(
-            tr('Revenue'),
-            '\\${revenue.toStringAsFixed(2)}',
-            Icons.payments_outlined,
-            const Color(0xFF15803D)),
-        const SizedBox(width: 12),
-        statCard(
-            tr('Processing'),
-            '${allOrders.where((o) => o.status == 'Processing').length}',
-            Icons.autorenew,
-            const Color(0xFFB45309)),
-        const SizedBox(width: 12),
-        statCard(
-            tr('Delivered'),
-            '${allOrders.where((o) => o.status == 'Delivered').length}',
-            Icons.check_circle_outline,
-            const Color(0xFF15803D)),
-      ]),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        child: Row(children: [
+          statCard(tr('Total Orders'), '${allOrders.length}',
+              Icons.receipt_long_outlined, const Color(0xFF5B4FE9)),
+          const SizedBox(width: 12),
+          statCard(
+              tr('Revenue'),
+              '\$${revenue.toStringAsFixed(2)}',
+              Icons.payments_outlined,
+              const Color(0xFF15803D)),
+          const SizedBox(width: 12),
+          statCard(
+              tr('Processing'),
+              '${allOrders.where((o) => o.status == 'Processing').length}',
+              Icons.autorenew,
+              const Color(0xFFB45309)),
+          const SizedBox(width: 12),
+          statCard(
+              tr('Shipped'),
+              '${allOrders.where((o) => o.status == 'Shipped').length}',
+              Icons.local_shipping_outlined,
+              const Color(0xFF1D4ED8)),
+          const SizedBox(width: 12),
+          statCard(
+              tr('Delivered'),
+              '${allOrders.where((o) => o.status == 'Delivered').length}',
+              Icons.check_circle_outline,
+              const Color(0xFF15803D)),
+          const SizedBox(width: 12),
+          statCard(
+              tr('Cancelled'),
+              '${allOrders.where((o) => o.status == 'Cancelled').length}',
+              Icons.cancel_outlined,
+              const Color(0xFFB91C1C)),
+        ]),
+      ),
       const SizedBox(height: 16),
-      // ---------------------------------------------- filter chips
-      Wrap(children: [
-        chip('All', allOrders.length),
-        ...statuses
-            .map((s) => chip(s, allOrders.where((o) => o.status == s).length)),
-      ]),
-      const SizedBox(height: 12),
       // ------------------------------------------------ table card
-      Container(
-        decoration: BoxDecoration(
-            color: sch.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: sch.outlineVariant)),
+      Expanded(
         child: AdminTableScaffold(
           searchHint: tr('Search orders...'),
           onSearch: onSearch,
@@ -3079,7 +3185,7 @@ class OrderDetailPage extends StatelessWidget {
                   order.owner.isEmpty ? tr('Guest') : order.owner),
               row(tr('Date'), order.date.toLocal().toString()),
               row(tr('Address'), order.deliveryAddress),
-              row('Status', order.status),
+              row(tr('Status'), tr(order.status)),
               const Divider(height: 24),
               ...order.items.map((it) => Padding(
                   padding:
@@ -3156,7 +3262,10 @@ class FeedbackTablePage extends StatelessWidget {
               flex: 5, child: CellText(tr('Message'), header: true)),
           Expanded(
               flex: 2, child: CellText(tr('Date'), header: true)),
-          const Expanded(flex: 1, child: SizedBox()),
+          Expanded(
+              flex: 1,
+              child: Center(
+                  child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(FeedbackItem f) => Padding(
@@ -3188,7 +3297,7 @@ class FeedbackTablePage extends StatelessWidget {
           Expanded(
               flex: 1,
               child: Align(
-                  alignment: Alignment.centerRight,
+                  alignment: Alignment.center,
                   child: IconButton(
                     tooltip: tr('Delete'),
                     onPressed: () => onDelete(f),
@@ -3242,8 +3351,6 @@ class _AdminProductEditDialogState
   late final TextEditingController rating = TextEditingController(
       text: (widget.existing?.rating ?? 0).toString());
 
-  bool _saving = false;
-
   @override
   void dispose() {
     for (final c in [
@@ -3259,9 +3366,11 @@ class _AdminProductEditDialogState
     super.dispose();
   }
 
-  Future<void> _save() async {
+  /// Closes the dialog immediately with the edited product. The caller
+  /// applies it to the list on screen and persists it in the background, so
+  /// the Save button never waits on storage or the network.
+  void _save() {
     if (!(_f.currentState?.validate() ?? false)) return;
-    setState(() => _saving = true);
     final p = Product(
         id: widget.existing?.id ?? -1,
         title: title.text.trim(),
@@ -3274,14 +3383,9 @@ class _AdminProductEditDialogState
         description: widget.existing?.description ?? '',
         thumbnail: widget.existing?.thumbnail ?? '',
         images: widget.existing?.images ?? const [],
-        status: widget.existing?.status ?? 'Active');
-    if (widget.existing == null) {
-      await widget.repo.add(p);
-    } else {
-      await widget.repo.update(p);
-    }
-    if (!mounted) return;
-    Navigator.pop(context, true);
+        status: widget.existing?.status ?? 'Active',
+        verified: widget.existing?.verified ?? false);
+    Navigator.pop(context, p);
   }
 
   InputDecoration _decoration({
@@ -3375,7 +3479,7 @@ class _AdminProductEditDialogState
                         Text(
                             isEdit
                                 ? tr('Edit Product')
-                                : tr('New Company'),
+                                : tr('New Product'),
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -3383,8 +3487,8 @@ class _AdminProductEditDialogState
                         const SizedBox(height: 2),
                         Text(
                             isEdit
-                                ? tr('Update the company details')
-                                : tr('Create a new company for the catalog'),
+                                ? tr('Update the product details')
+                                : tr('Create a new product for the catalog'),
                             style: const TextStyle(
                                 fontSize: 12, color: Colors.white70)),
                       ]),
@@ -3522,9 +3626,7 @@ class _AdminProductEditDialogState
               child: Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(context, null),
                     icon: const Icon(Icons.close, size: 18),
                     label: Text(tr('Cancel')),
                     style: OutlinedButton.styleFrom(
@@ -3536,22 +3638,15 @@ class _AdminProductEditDialogState
                 Expanded(
                   flex: 2,
                   child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
+                    onPressed: _save,
                     style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF5B4FE9),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14)),
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white))
-                        : Icon(
-                            isEdit ? Icons.check : Icons.add,
-                            size: 18),
+                    icon: Icon(
+                        isEdit ? Icons.check : Icons.add,
+                        size: 18),
                     label: Text(isEdit
                         ? tr('Save')
                         : tr('Add Product')),
@@ -3567,7 +3662,7 @@ class _AdminProductEditDialogState
 }
 
 // ============================================================================
-// Add/Edit company dialog (Companies page — product rows shown as companies)
+// Add/Edit shop dialog (Shops page — product rows shown as shops)
 // ============================================================================
 
 class AdminCompanyEditDialog extends StatefulWidget {
@@ -3589,18 +3684,15 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
       text: widget.existing?.category ?? '');
   late final TextEditingController website = TextEditingController(
       text: widget.existing?.thumbnail ?? '');
-  late final TextEditingController price = TextEditingController(
-      text: (widget.existing?.price ?? 0).toString());
-  late final TextEditingController stock = TextEditingController(
-      text: (widget.existing?.stock ?? 0).toString());
+  late final TextEditingController description = TextEditingController(
+      text: widget.existing?.description ?? '');
   late final TextEditingController rating = TextEditingController(
       text: (widget.existing?.rating ?? 0).toString());
 
   late bool _verified = widget.existing?.verified ?? false;
 
-  /// Company availability shown in the Status dropdown: Active / Inactive.
+  /// Shop availability shown in the Status dropdown: Active / Inactive.
   late String _status = widget.existing?.status ?? 'Active';
-  bool _saving = false;
 
   @override
   void dispose() {
@@ -3608,8 +3700,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
       company,
       location,
       website,
-      price,
-      stock,
+      description,
       rating,
     ]) {
       c.dispose();
@@ -3617,36 +3708,36 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  /// Closes the dialog immediately with the edited shop. The caller
+  /// applies it to the list on screen and persists it in the background, so
+  /// the Save button never waits on storage or the network.
+  void _save() {
     if (!(_f.currentState?.validate() ?? false)) return;
-    setState(() => _saving = true);
     final p = Product(
         id: widget.existing?.id ?? -1,
         title: company.text.trim(),
-        price: double.tryParse(price.text) ?? 0,
+        // Stock and Price were removed from the Shops page — keep the
+        // existing values untouched so editing a shop never loses product
+        // data (new shops default them to 0 like all new products).
+        price: widget.existing?.price ?? 0,
         discountPercentage: widget.existing?.discountPercentage ?? 0,
         rating: double.tryParse(rating.text) ?? 0,
-        stock: int.tryParse(stock.text) ?? 0,
+        stock: widget.existing?.stock ?? 0,
         brand: widget.existing?.brand ?? '',
         category: location.text.trim().toLowerCase(),
-        description: widget.existing?.description ?? '',
+        description: description.text.trim(),
         thumbnail: website.text.trim(),
         images: widget.existing?.images ?? const [],
         status: _status,
         verified: _verified);
-    if (widget.existing == null) {
-      await widget.repo.add(p);
-    } else {
-      await widget.repo.update(p);
-    }
-    if (!mounted) return;
-    Navigator.pop(context, true);
+    Navigator.pop(context, p);
   }
 
   InputDecoration _decoration({
     IconData? icon,
     String? prefixText,
     String? hint,
+    bool alignTop = false,
   }) {
     final sch = Theme.of(context).colorScheme;
     OutlineInputBorder border(Color c, double w) => OutlineInputBorder(
@@ -3654,6 +3745,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
         borderSide: BorderSide(color: c, width: w));
     return InputDecoration(
       hintText: hint,
+      alignLabelWithHint: alignTop,
       prefixIcon: icon == null ? null : Icon(icon, size: 20),
       prefixText: prefixText,
       prefixStyle: TextStyle(
@@ -3718,7 +3810,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                   child: Icon(
                       isEdit
                           ? Icons.edit_outlined
-                          : Icons.business_outlined,
+                          : Icons.storefront_outlined,
                       color: Colors.white),
                 ),
                 const SizedBox(width: 14),
@@ -3728,8 +3820,8 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                         children: [
                       Text(
                           isEdit
-                              ? tr('Edit Company')
-                              : tr('New Company'),
+                              ? tr('Edit Shop')
+                              : tr('New Shop'),
                           style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -3737,8 +3829,8 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                       const SizedBox(height: 2),
                       Text(
                           isEdit
-                              ? tr('Update the company details')
-                              : tr('Create a new company for the catalog'),
+                              ? tr('Update the shop details')
+                              : tr('Create a new shop for the catalog'),
                           style: const TextStyle(
                               fontSize: 12, color: Colors.white70)),
                     ])),
@@ -3752,13 +3844,13 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _label(tr('Company')),
+                      _label(tr('Shop')),
                       TextFormField(
                           controller: company,
                           autofocus: !isEdit,
                           textCapitalization: TextCapitalization.words,
                           decoration: _decoration(
-                            icon: Icons.business_outlined,
+                            icon: Icons.storefront_outlined,
                             hint: 'e.g. Acme Corp',
                           ),
                           validator: (v) =>
@@ -3886,49 +3978,6 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                                             _status = v ?? 'Active'),
                                       ),
                                     ])),
-                          ]),
-                      const SizedBox(height: 16),
-                      Row(crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _label(tr('Price')),
-                                      TextFormField(
-                                          controller: price,
-                                          keyboardType:
-                                              const TextInputType
-                                                  .numberWithOptions(
-                                                      decimal: true),
-                                          decoration: _decoration(
-                                            prefixText: '\$ ',
-                                            hint: '0.00',
-                                          ),
-                                          validator: (v) =>
-                                              (double.tryParse(v ?? '') ??
-                                                      -1) <
-                                                  0
-                                                  ? tr(
-                                                      'Enter a valid price')
-                                                  : null),
-                                    ])),
-                            const SizedBox(width: 12),
-                            Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _label(tr('Stock')),
-                                      TextFormField(
-                                          controller: stock,
-                                          keyboardType: TextInputType.number,
-                                          decoration: _decoration(
-                                              icon:
-                                                  Icons.inventory_2_outlined,
-                                              hint: '0')),
-                                    ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
@@ -3955,6 +4004,18 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                                                   : null),
                                     ])),
                           ]),
+                      const SizedBox(height: 16),
+                      _label(tr('Description')),
+                      TextFormField(
+                          controller: description,
+                          minLines: 2,
+                          maxLines: 3,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: _decoration(
+                            icon: Icons.notes_outlined,
+                            hint: tr('Short description of this shop'),
+                            alignTop: true,
+                          )),
                     ]),
               ),
             ),
@@ -3964,9 +4025,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
               child: Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(context, null),
                     icon: const Icon(Icons.close, size: 18),
                     label: Text(tr('Cancel')),
                     style: OutlinedButton.styleFrom(
@@ -3978,25 +4037,18 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                 Expanded(
                   flex: 2,
                   child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
+                    onPressed: _save,
                     style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF5B4FE9),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14)),
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white))
-                        : Icon(
-                            isEdit ? Icons.check : Icons.add,
-                            size: 18),
+                    icon: Icon(
+                        isEdit ? Icons.check : Icons.add,
+                        size: 18),
                     label: Text(isEdit
                         ? tr('Save')
-                        : tr('Add Company')),
+                        : tr('Add Shop')),
                   ),
                 ),
               ]),

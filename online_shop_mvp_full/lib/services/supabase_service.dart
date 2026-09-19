@@ -27,6 +27,11 @@ class SupabaseService {
   sb.SupabaseClient? _client;
   bool _failed = false;
 
+  /// True when cloud calls are short-circuited for `flutter test` (no real
+  /// network there). Also read by the repositories/presenters so they skip
+  /// their cloud paths too and use the local data sources instead.
+  static bool get testMode => _inFlutterTest;
+
   /// True inside `flutter test`: there is no real network there (HTTP calls
   /// return 400 and the supabase client leaves pending timers that fail the
   /// widget tests), so every cloud call short-circuits and the app falls
@@ -97,9 +102,14 @@ class SupabaseService {
       String pk, Object? pkValue) async {
     if (_inFlutterTest) return false;
     try {
-      await client.from(table).update(row).eq(pk, pkValue as Object);
+      // `.select()` makes PostgREST return the rows that were actually
+      // written, so an update that matches NO row (the row only exists on
+      // this device — e.g. the cloud table is empty) reports false and the
+      // caller falls back to the local store instead of losing the edit.
+      final res =
+          await client.from(table).update(row).eq(pk, pkValue as Object).select();
       _failed = false;
-      return true;
+      return (res as List).isNotEmpty;
     } catch (_) {
       _failed = true;
       return false;
@@ -109,9 +119,13 @@ class SupabaseService {
   Future<bool> _delete(String table, String pk, Object? pkValue) async {
     if (_inFlutterTest) return false;
     try {
-      await client.from(table).delete().eq(pk, pkValue as Object);
+      // `.select()` counts the rows really deleted, so deleting a row that
+      // was never in the cloud reports false (the caller handles its local
+      // copy instead).
+      final res =
+          await client.from(table).delete().eq(pk, pkValue as Object).select();
       _failed = false;
-      return true;
+      return (res as List).isNotEmpty;
     } catch (_) {
       _failed = true;
       return false;
@@ -152,6 +166,20 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> allUsers() =>
       _select('app_users', orderBy: 'username');
 
+  /// True when the account [username] still exists in the cloud directory,
+  /// false when it was deleted (e.g. by the admin), and null when the answer
+  /// is unknown (offline / running tests). The null case lets callers avoid
+  /// logging a user out just because the network is down.
+  Future<bool?> userExists(String username) async {
+    if (_inFlutterTest) return null;
+    final rows = await _select('app_users',
+        eqColumn: 'username',
+        eqValue: username.trim().toLowerCase(),
+        limit: 1);
+    if (_failed) return null; // could not reach the cloud — answer unknown
+    return rows.isNotEmpty;
+  }
+
   /// Insert (or ignore if the username already exists) a shop account.
   /// Returns false when the cloud could not be reached.
   Future<bool> upsertUser(Map<String, dynamic> row) async {
@@ -162,6 +190,13 @@ class SupabaseService {
 
   Future<bool> deleteUser(String username) =>
       _delete('app_users', 'username', username.trim().toLowerCase());
+
+  /// Promote/demote an account's role in the shared cloud directory
+  /// (is_admin toggle used by the Administration page). Returns true when
+  /// the cloud accepted the change.
+  Future<bool> updateUserRole(String username, bool isAdmin) =>
+      _update('app_users', {'is_admin': isAdmin}, 'username',
+          username.trim().toLowerCase());
 
   // --------------------------------------------------------------- products
 
@@ -175,11 +210,32 @@ class SupabaseService {
   /// Adds the row including the `verified` column. If the connected
   /// database has not been migrated yet (older schema without `verified`),
   /// retries once without that column so the save still succeeds.
-  Future<bool> addProduct(Product p) async {
-    final ok = await _insert(
+  /// Returns the stored row (with its real cloud id) so the caller can
+  /// replace a temporary device-local copy — or null when offline.
+  Future<Map<String, dynamic>?> addProductRow(Product p) async {
+    var row = await _insertReturning(
         'products', productRow(p, newLocalId: true, withVerified: true));
-    if (ok) return true;
-    return _insert('products', productRow(p, newLocalId: true));
+    row ??=
+        await _insertReturning('products', productRow(p, newLocalId: true));
+    return row;
+  }
+
+  /// Insert that gives back the stored row (PostgREST return=representation
+  /// via `.select()`), or null when offline / the table is missing.
+  Future<Map<String, dynamic>?> _insertReturning(
+      String table, Map<String, dynamic> row) async {
+    if (_inFlutterTest) return null;
+    try {
+      final res = await client.from(table).insert(row).select();
+      _failed = false;
+      final list = res as List;
+      return list.isEmpty
+          ? null
+          : (list.first as Map).cast<String, dynamic>();
+    } catch (_) {
+      _failed = true;
+      return null;
+    }
   }
 
   /// Update akin to [addProduct]: preferred path with `verified`, fallback
@@ -295,8 +351,19 @@ class SupabaseService {
 
   // ----------------------------------------------------------------- orders
 
-  Future<List<Order>> orders() async {
-    final rows = await _select('orders', orderBy: 'created_at', ascending: false);
+  /// Cloud orders, newest first.
+  ///
+  /// [owner] filters to a single account's orders (used by the shopper's
+  /// Order History so each user only ever sees their own — changing one
+  /// user's order in the admin panel can never touch another user's).
+  /// Empty/null returns every order (admin panel).
+  Future<List<Order>> orders({String? owner}) async {
+    final rows = await _select('orders',
+        eqColumn:
+            (owner != null && owner.isNotEmpty) ? 'owner' : null,
+        eqValue: owner,
+        orderBy: 'created_at',
+        ascending: false);
     return rows.map(Order.fromSupabase).toList();
   }
 
@@ -499,6 +566,123 @@ class SupabaseService {
   void cancelFeedbackWatch() {
     final ch = _feedbackChannel;
     _feedbackChannel = null;
+    if (ch == null) return;
+    try {
+      client.removeChannel(ch);
+    } catch (_) {}
+  }
+
+  sb.RealtimeChannel? _usersChannel;
+
+  /// Listen for live changes to the shop account directory (`app_users`).
+  ///
+  /// [onInsert] fires the moment a new account row appears (a signup or a
+  /// first sign-in), so the admin's Users page updates without any refresh.
+  ///
+  /// [onDelete] fires with the deleted username the moment an account is
+  /// removed (admin delete), so the signed-in shopper can be logged out
+  /// immediately.
+  ///
+  /// Needs the `app_users` table added to the `supabase_realtime`
+  /// publication (see supabase_schema.sql); if realtime is not enabled the
+  /// callers' polling fallbacks still keep everything fresh.
+  void watchUsers({
+    void Function()? onInsert,
+    void Function(String username)? onDelete,
+  }) {
+    if (_inFlutterTest) return;
+    try {
+      cancelUsersWatch();
+      var ch = client.channel('users-live');
+      if (onInsert != null) {
+        ch = ch.onPostgresChanges(
+          event: sb.PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'app_users',
+          callback: (_) => onInsert(),
+        );
+      }
+      if (onDelete != null) {
+        ch = ch.onPostgresChanges(
+          event: sb.PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'app_users',
+          // `username` is the primary key, so it is always part of the
+          // old record the realtime service broadcasts for a delete.
+          callback: (payload) {
+            final uname = payload.oldRecord['username']?.toString() ?? '';
+            if (uname.isNotEmpty) onDelete(uname);
+          },
+        );
+      }
+      _usersChannel = ch.subscribe();
+    } catch (_) {
+      // Realtime unavailable (offline / not enabled) — the polling fallbacks
+      // in the admin panel and the app root cover it.
+      _usersChannel = null;
+    }
+  }
+
+  /// Stop listening for live users (called when the admin panel closes).
+  void cancelUsersWatch() {
+    final ch = _usersChannel;
+    _usersChannel = null;
+    if (ch == null) return;
+    try {
+      client.removeChannel(ch);
+    } catch (_) {}
+  }
+
+  sb.RealtimeChannel? _ordersChannel;
+
+  /// Listen for live changes to the `orders` table.
+  ///
+  /// [onInsert] fires the moment a NEW order row appears (a shopper just
+  /// checked out), so the admin's Orders page can show it without any
+  /// refresh.
+  ///
+  /// [onChanged] fires when an existing order is updated (the admin changes
+  /// the status to Processing / Shipped / Delivered / Cancelled), so the
+  /// shopper's Order History reflects it the moment it happens — no
+  /// pull-to-refresh, no re-login.
+  ///
+  /// Needs the `orders` table added to the `supabase_realtime` publication
+  /// (see supabase_schema.sql); if realtime is not enabled the polling
+  /// fallbacks in the Order History page and the admin panel still keep
+  /// everything fresh.
+  void watchOrders({void Function()? onInsert, void Function()? onChanged}) {
+    if (_inFlutterTest) return;
+    try {
+      cancelOrdersWatch();
+      var ch = client.channel('orders-live');
+      if (onInsert != null) {
+        ch = ch.onPostgresChanges(
+          event: sb.PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'orders',
+          callback: (_) => onInsert(),
+        );
+      }
+      if (onChanged != null) {
+        ch = ch.onPostgresChanges(
+          event: sb.PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'orders',
+          callback: (_) => onChanged(),
+        );
+      }
+      _ordersChannel = ch.subscribe();
+    } catch (_) {
+      // Realtime unavailable (offline / not enabled) — the polling
+      // fallbacks in the Order History page and the admin panel cover it.
+      _ordersChannel = null;
+    }
+  }
+
+  /// Stop listening for live order changes.
+  void cancelOrdersWatch() {
+    final ch = _ordersChannel;
+    _ordersChannel = null;
     if (ch == null) return;
     try {
       client.removeChannel(ch);

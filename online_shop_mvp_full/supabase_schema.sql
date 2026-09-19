@@ -110,9 +110,13 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------- realtime --
--- Lets the admin panel receive NEW feedback instantly (no refresh). Safe to
--- re-run: it only alters the publication membership.
+-- Lets the admin panel receive NEW feedback instantly (no refresh) and
+-- pushes live Users-page updates (new accounts) to the admin plus instant
+-- "your account was deleted" events to signed-in shoppers. Safe to re-run:
+-- it only alters the publication membership.
 alter publication supabase_realtime add table public.feedback;
+alter publication supabase_realtime add table public.app_users;
+alter publication supabase_realtime add table public.orders;
 
 -- Refresh PostgREST's schema cache so brand-new tables are visible to the
 -- API immediately after this script runs.

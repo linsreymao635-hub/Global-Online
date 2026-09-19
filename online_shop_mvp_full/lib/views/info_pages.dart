@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -5,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../presenters/presenters.dart';
 import '../services/app_settings.dart';
+import '../services/supabase_service.dart';
 
 // ---------------------------------------------------------------------------
 // Shared helpers for the informational pages
@@ -63,8 +66,8 @@ Widget _sec(BuildContext c, String title, List<Widget> children) {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w800),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -115,36 +118,39 @@ class AboutUsPage extends StatelessWidget {
       title: tr('About Us'),
       sections: [
         _sec(c, tr('Who We Are'), [
-          _p(c, tr(
-              'Global Online is a modern online marketplace delivering quality '
-              'products straight to your door in Cambodia. From electronics and '
-              'fashion to home essentials and groceries, we bring thousands of '
-              'curated items together in one easy app.')),
-          _p(c, tr(
-              'Founded with a simple idea — trustworthy shopping from your phone — '
-              'we combine fair prices, honest service, and fast delivery.')),
+          _p(
+              c,
+              tr('Global Online is a modern online marketplace delivering quality '
+                  'products straight to your door in Cambodia. From electronics and '
+                  'fashion to home essentials and groceries, we bring thousands of '
+                  'curated items together in one easy app.')),
+          _p(
+              c,
+              tr('Founded with a simple idea — trustworthy shopping from your phone — '
+                  'we combine fair prices, honest service, and fast delivery.')),
         ]),
         _sec(c, tr('Our Mission'), [
-          _p(c, tr(
-              'Our mission is to make online shopping simple, safe and enjoyable '
-              'for everyone. We work directly with suppliers so you get great '
-              'value with every order.')),
+          _p(
+              c,
+              tr('Our mission is to make online shopping simple, safe and enjoyable '
+                  'for everyone. We work directly with suppliers so you get great '
+                  'value with every order.')),
         ]),
         _sec(c, tr('Our Values'), [
-          _bullet(c, Icons.favorite_outline, tr(
-              'Customer first — your happiness drives every decision we make.')),
-          _bullet(c, Icons.verified_outlined, tr(
-              'Honesty — clear prices, real stock and transparent policies.')),
-          _bullet(c, Icons.eco_outlined, tr(
-              'Sustainability — we reduce waste and support local partners.')),
-          _bullet(c, Icons.rocket_launch_outlined, tr(
-              'Innovation — we keep improving the app around your needs.')),
+          _bullet(c, Icons.favorite_outline,
+              tr('Customer first — your happiness drives every decision we make.')),
+          _bullet(c, Icons.verified_outlined,
+              tr('Honesty — clear prices, real stock and transparent policies.')),
+          _bullet(c, Icons.eco_outlined,
+              tr('Sustainability — we reduce waste and support local partners.')),
+          _bullet(c, Icons.rocket_launch_outlined,
+              tr('Innovation — we keep improving the app around your needs.')),
         ]),
         _sec(c, tr('Why Shop With Us'), [
           _bullet(c, Icons.local_shipping_outlined,
               tr('Fast, tracked delivery across Cambodia.')),
-          _bullet(c, Icons.payments_outlined, tr(
-              'Flexible payment: cash on delivery, cards, KHQR and mobile banking.')),
+          _bullet(c, Icons.payments_outlined,
+              tr('Flexible payment: cash on delivery, cards, KHQR and mobile banking.')),
           _bullet(c, Icons.support_agent_outlined,
               tr('Friendly support on chat, phone and Telegram.')),
           _bullet(c, Icons.autorenew_outlined,
@@ -161,10 +167,8 @@ class AboutUsPage extends StatelessWidget {
 class ContactUsPage extends StatelessWidget {
   const ContactUsPage({super.key});
 
-  Future<void> _callA() =>
-      launchUrl(Uri(scheme: 'tel', path: '+855066778213'));
-  Future<void> _callB() =>
-      launchUrl(Uri(scheme: 'tel', path: '+855769778213'));
+  Future<void> _callA() => launchUrl(Uri(scheme: 'tel', path: '+855066778213'));
+  Future<void> _callB() => launchUrl(Uri(scheme: 'tel', path: '+855769778213'));
   Future<void> _email() => launchUrl(
         Uri(scheme: 'mailto', path: 'support@globalonline.com'),
       );
@@ -298,17 +302,18 @@ class ContactUsPage extends StatelessWidget {
           ),
         ]),
         _sec(c, tr('Faster help'), [
-          _p(c, tr(
-              'For order status, shipping questions and returns, check the FAQ '
-              'or open Chat Support — our assistant answers instantly.')),
+          _p(
+              c,
+              tr('For order status, shipping questions and returns, check the FAQ '
+                  'or open Chat Support — our assistant answers instantly.')),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _email,
               icon: const Icon(Icons.mail_outline),
               label: Text(tr('Send us an email')),
-              style:
-                  OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
           ),
           const SizedBox(height: 8),
@@ -318,8 +323,8 @@ class ContactUsPage extends StatelessWidget {
               onPressed: _callA,
               icon: const Icon(Icons.phone_outlined),
               label: Text(tr('Call us now')),
-              style:
-                  OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
           ),
           const SizedBox(height: 8),
@@ -330,8 +335,8 @@ class ContactUsPage extends StatelessWidget {
                   content: Text(tr('Thanks! We will get back to you soon.')))),
               icon: const Icon(Icons.chat_bubble_outline),
               label: Text(tr('Leave a message')),
-              style:
-                  OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
           ),
         ]),
@@ -352,49 +357,57 @@ class TermsConditionsPage extends StatelessWidget {
       title: tr('Terms & Conditions'),
       sections: [
         _sec(c, tr('1. Overview'), [
-          _p(c, tr(
-              'By using the Global Online application you agree to these terms. '
-              'If you do not agree, please do not use the app. We may update '
-              'these terms from time to time, and continued use means you '
-              'accept the latest version.')),
+          _p(
+              c,
+              tr('By using the Global Online application you agree to these terms. '
+                  'If you do not agree, please do not use the app. We may update '
+                  'these terms from time to time, and continued use means you '
+                  'accept the latest version.')),
         ]),
         _sec(c, tr('2. Orders & Payment'), [
-          _p(c, tr(
-              'All prices are shown in US dollars and include applicable taxes. '
-              'An order is confirmed once you complete checkout. We accept cash '
-              'on delivery, credit and debit cards, KHQR and mobile banking.')),
-          _p(c, tr(
-              'We reserve the right to refuse or cancel an order, for example '
-              'when a product is out of stock or a price error occurred.')),
+          _p(
+              c,
+              tr('All prices are shown in US dollars and include applicable taxes. '
+                  'An order is confirmed once you complete checkout. We accept cash '
+                  'on delivery, credit and debit cards, KHQR and mobile banking.')),
+          _p(
+              c,
+              tr('We reserve the right to refuse or cancel an order, for example '
+                  'when a product is out of stock or a price error occurred.')),
         ]),
         _sec(c, tr('3. Shipping & Delivery'), [
-          _p(c, tr(
-              'Orders are delivered in 2–5 working days. Delivery is free for '
-              'orders over the minimum amount. After dispatch you can track '
-              'your order from Profile → Order History.')),
+          _p(
+              c,
+              tr('Orders are delivered in 2–5 working days. Delivery is free for '
+                  'orders over the minimum amount. After dispatch you can track '
+                  'your order from Profile → Order History.')),
         ]),
         _sec(c, tr('4. Returns & Refunds'), [
-          _p(c, tr(
-              'You may return unused items in their original packaging within '
-              '7 days. Refunds are processed within 3–5 working days after we '
-              'receive the returned item.')),
+          _p(
+              c,
+              tr('You may return unused items in their original packaging within '
+                  '7 days. Refunds are processed within 3–5 working days after we '
+                  'receive the returned item.')),
         ]),
         _sec(c, tr('5. Account & Using the App'), [
-          _p(c, tr(
-              'You are responsible for keeping your login details safe and for '
-              'all activity on your account. You may not misuse the app, '
-              'attempt to break its security, or resell our content.')),
+          _p(
+              c,
+              tr('You are responsible for keeping your login details safe and for '
+                  'all activity on your account. You may not misuse the app, '
+                  'attempt to break its security, or resell our content.')),
         ]),
         _sec(c, tr('6. Limitation of Liability'), [
-          _p(c, tr(
-              'Global Online is not liable for damages caused by misuse of '
-              'products or by events beyond our control, such as delays caused '
-              'by third party couriers or natural disasters.')),
+          _p(
+              c,
+              tr('Global Online is not liable for damages caused by misuse of '
+                  'products or by events beyond our control, such as delays caused '
+                  'by third party couriers or natural disasters.')),
         ]),
         _sec(c, tr('7. Contact'), [
-          _p(c, tr(
-              'For any question about these terms, contact us via email at '
-              'support@globalonline.com or use Chat Support in the app.')),
+          _p(
+              c,
+              tr('For any question about these terms, contact us via email at '
+                  'support@globalonline.com or use Chat Support in the app.')),
         ]),
       ],
     );
@@ -413,12 +426,13 @@ class PrivacyPolicyPage extends StatelessWidget {
       title: tr('Privacy Policy'),
       sections: [
         _sec(c, tr('Information We Collect'), [
-          _p(c, tr(
-              'We collect the information you give us when you create an '
-              'account or place an order: your name, phone number, email and '
-              'delivery address. We also store minimal data on this device, '
-              'such as your password for local logins, your saved address and '
-              'your shopping cart.')),
+          _p(
+              c,
+              tr('We collect the information you give us when you create an '
+                  'account or place an order: your name, phone number, email and '
+                  'delivery address. We also store minimal data on this device, '
+                  'such as your password for local logins, your saved address and '
+                  'your shopping cart.')),
         ]),
         _sec(c, tr('How We Use Your Information'), [
           _bullet(c, Icons.shopping_bag_outlined,
@@ -431,31 +445,36 @@ class PrivacyPolicyPage extends StatelessWidget {
               tr('To improve our products and services.')),
         ]),
         _sec(c, tr('Cookies & Local Storage'), [
-          _p(c, tr(
-              'The app stores only the information needed for it to work. This '
-              'data stays on your device and is never sold to third parties.')),
+          _p(
+              c,
+              tr('The app stores only the information needed for it to work. This '
+                  'data stays on your device and is never sold to third parties.')),
         ]),
         _sec(c, tr('Data Sharing'), [
-          _p(c, tr(
-              'We share your delivery details only with the courier that '
-              'delivers your order, and with payment providers only to '
-              'complete a payment you chose. We never sell your personal data.')),
+          _p(
+              c,
+              tr('We share your delivery details only with the courier that '
+                  'delivers your order, and with payment providers only to '
+                  'complete a payment you chose. We never sell your personal data.')),
         ]),
         _sec(c, tr('Data Security'), [
-          _p(c, tr(
-              'We take reasonable steps to protect your personal information. '
-              'Local sign-in data is stored within the app on your own device.')),
+          _p(
+              c,
+              tr('We take reasonable steps to protect your personal information. '
+                  'Local sign-in data is stored within the app on your own device.')),
         ]),
         _sec(c, tr('Your Rights'), [
-          _p(c, tr(
-              'You can edit your profile, change your password, or delete your '
-              'account at any time from the Profile page. Deleting your account '
-              'removes your saved data from this device.')),
+          _p(
+              c,
+              tr('You can edit your profile, change your password, or delete your '
+                  'account at any time from the Profile page. Deleting your account '
+                  'removes your saved data from this device.')),
         ]),
         _sec(c, tr('Contact Us'), [
-          _p(c, tr(
-              'If you have questions about this privacy policy, email '
-              'support@globalonline.com or use Chat Support in the app.')),
+          _p(
+              c,
+              tr('If you have questions about this privacy policy, email '
+                  'support@globalonline.com or use Chat Support in the app.')),
         ]),
       ],
     );
@@ -717,6 +736,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 // ---------------------------------------------------------------------------
 class DeleteAccountPage extends StatefulWidget {
   final User user;
+
   /// The username of the signed-in session (unlike [user], it is never
   /// overwritten by profile edits) — used to remove the correct local auth.
   final String loginUsername;
@@ -744,17 +764,64 @@ class _DeleteAccount extends State<DeleteAccountPage> {
   final _form = GlobalKey<FormState>();
   final _reason = TextEditingController();
   final _password = TextEditingController();
+  bool _obscure = true;
 
+  /// Password stored on THIS device (Sign Up / Change Password here).
   String get _storedPassword =>
       AppSettings.localAuth[widget.loginUsername.trim().toLowerCase()]
-          ?['password']?.toString() ?? '';
+              ?['password']
+          ?.toString() ??
+      '';
   bool get _hasPassword => _storedPassword.isNotEmpty;
+
+  /// True when the account also exists in the shared cloud directory with a
+  /// password hash, i.e. the password can be verified against the cloud even
+  /// if this device never stored it (account created on another phone).
+  /// Resolved once in initState.
+  bool _cloudAccount = false;
+  bool _checkedCloud = false;
+
+  /// A password field is required when the account has ANY verifiable
+  /// password: the device-local one, or a cloud hash to check against.
+  bool get _needsPassword => _hasPassword || _cloudAccount;
+
+  @override
+  void initState() {
+    super.initState();
+    // Quietly ask the cloud whether this account has a password hash — a
+    // device-local check alone is not enough for accounts registered
+    // elsewhere and only mirrored into the cloud.
+    unawaited(_resolveCloudAccount());
+  }
+
+  Future<void> _resolveCloudAccount() async {
+    final uname = widget.loginUsername.trim().toLowerCase();
+    if (uname.isEmpty) return;
+    final row = await SupabaseService.instance.userByUsername(uname);
+    if (!mounted) return;
+    setState(() {
+      _cloudAccount =
+          row != null && (row['password_hash'] as String? ?? '').isNotEmpty;
+      _checkedCloud = true;
+    });
+  }
 
   @override
   void dispose() {
     _reason.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// True when [value] matches the account's real password: the device
+  /// local copy first, then the cloud hash for cloud accounts.
+  Future<bool> _passwordMatches(String value) async {
+    if (_hasPassword && value == _storedPassword) return true;
+    if (!_cloudAccount) return false;
+    final hash = SupabaseService.hashPassword(value);
+    final row = await SupabaseService.instance
+        .userByUsername(widget.loginUsername.trim().toLowerCase());
+    return row != null && (row['password_hash'] as String? ?? '') == hash;
   }
 
   Future<void> _confirmDelete() async {
@@ -764,7 +831,7 @@ class _DeleteAccount extends State<DeleteAccountPage> {
       builder: (dc) => AlertDialog(
         icon: const Icon(Icons.warning_amber_outlined,
             size: 40, color: Colors.red),
-        title: Text(tr('Are you sure you want to delete this account?')),
+        title: Text(tr('Are you sure you want to delete your account?')),
         content: Text(tr(
             'Your profile, saved address, cart, favorites and local password '
             'will be removed from this device. This cannot be undone.')),
@@ -788,11 +855,17 @@ class _DeleteAccount extends State<DeleteAccountPage> {
   Future<void> _delete() async {
     // Store the off-boarding feedback (why the user is leaving).
     await AppSettings.saveFeedback(_reason.text);
+    // Remove the account from the shared cloud directory too, so it no
+    // longer shows up in the admin's Users page and can never sign in
+    // again from any device. Best-effort: local cleanup always continues.
+    await SupabaseService.instance.deleteUser(widget.loginUsername);
     // Clean up all locally stored account data.
     await AppSettings.removeLocalAccount(widget.loginUsername);
     await AppSettings.removeProfile(widget.ownerKey);
     await AppSettings.clearAddress();
     await AppSettings.clearSession();
+    // The session is gone — it must not be treated as cloud-verified.
+    await AppSettings.markSessionCloudOk(false);
     widget.cart.clear();
     widget.fav.ids.clear();
     if (!mounted) return;
@@ -809,7 +882,6 @@ class _DeleteAccount extends State<DeleteAccountPage> {
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
-    final pending = widget.orders.hasPending;
     return Scaffold(
       appBar: AppBar(title: Text(tr('Delete Account'))),
       body: Form(
@@ -817,162 +889,111 @@ class _DeleteAccount extends State<DeleteAccountPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: sch.errorContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.warning_amber_outlined,
-                      color: sch.onErrorContainer),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr('After deleting your account, you will not be '
-                              'able to use it again.'),
-                          style: TextStyle(
-                              fontSize: 13.5,
-                              height: 1.5,
-                              fontWeight: FontWeight.w700,
-                              color: sch.onErrorContainer),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          tr('Are you sure you want to delete your account?'),
-                          style: TextStyle(
-                              fontSize: 13.5,
-                              height: 1.5,
-                              color: sch.onErrorContainer),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
             _sec(c, tr('Order Cancellation'), [
               const SizedBox(height: 6),
               Text(
                 tr('Before deleting your account, make sure you don\'t have '
                     'any order that is in progress.'),
                 style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: sch.onSurfaceVariant),
+                    fontSize: 14, height: 1.5, color: sch.onSurfaceVariant),
+              ),            ]),
+            // The reason + password fields and the Delete button are ALWAYS
+            // visible (they used to be hidden entirely while orders were
+            // pending, leaving this page with no way to delete at all).
+            _sec(c, tr('Account Deletion Reason'), [
+              const SizedBox(height: 6),
+              Text(
+                tr('We are really sorry to hear that you decided to leave '
+                    'us. However, your feedback can be useful for us to '
+                    'improve our system.'),
+                style: TextStyle(
+                    fontSize: 14, height: 1.5, color: sch.onSurfaceVariant),
               ),
-            ]),
-            if (pending) ...[
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _reason,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: InputDecoration(
+                  labelText: tr('Add your reason here'),
+                  hintText: tr('Share your feedback...'),
+                  alignLabelWithHint: true,
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none),
+                ),
+              ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: sch.secondaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline,
-                        color: sch.onSecondaryContainer),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        tr('You have pending (processing) orders. Please wait '
-                            'until they are completed before deleting your '
-                            'account.'),
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            height: 1.5,
-                            color: sch.onSecondaryContainer),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (!pending) ...[
-              _sec(c, tr('Account Deletion Reason'), [
-                const SizedBox(height: 6),
-                Text(
-                  tr('We are really sorry to hear that you decided to leave '
-                      'us. However, your feedback can be useful for us to '
-                      'improve our system.'),
-                  style: TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: sch.onSurfaceVariant),
-                ),
-                const SizedBox(height: 14),
+              if (_needsPassword)
                 TextFormField(
-                  controller: _reason,
-                  maxLines: 3,
-                  maxLength: 500,
+                  controller: _password,
+                  obscureText: _obscure,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return tr('Password is required');
+                    }
+                    return null;
+                  },
                   decoration: InputDecoration(
-                    labelText: tr('Add your reason here'),
-                    hintText: tr('Share your feedback...'),
-                    alignLabelWithHint: true,
+                    labelText: tr('Password'),
+                    hintText: tr('Enter your password to confirm.'),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     filled: true,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_hasPassword)
-                  TextFormField(
-                    controller: _password,
-                    obscureText: true,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) {
-                        return tr('Password is required');
-                      }
-                      if (v != _storedPassword) {
-                        return tr('Current password is incorrect');
-                      }
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      labelText: tr('Password'),
-                      hintText: tr('Enter your password to confirm.'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      filled: true,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
-                  )
-                else
-                  Text(
-                    tr('No password is set for this account yet.'),
-                    style: TextStyle(
-                        fontSize: 12, color: sch.onSurfaceVariant),
                   ),
-              ]),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () {
-                  if (_form.currentState!.validate()) _confirmDelete();
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: sch.error,
-                  foregroundColor: sch.onError,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+                )
+              else if (!_checkedCloud)
+                // Still asking the cloud whether a password check applies.
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              else
+                Text(
+                  tr('No password is set for this account yet.'),
+                  style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant),
                 ),
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: Text(tr('Delete my account')),
+            ]),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () async {
+                if (!_form.currentState!.validate()) return;
+                if (_needsPassword) {
+                  final ok = await _passwordMatches(_password.text);
+                  if (!mounted) return;
+                  if (!ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(tr('Current password is incorrect'))));
+                    return;
+                  }
+                }
+                _confirmDelete();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: sch.error,
+                foregroundColor: sch.onError,
+                padding: const EdgeInsets.symmetric(vertical: 15),
               ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(c).maybePop(),
-                child: Text(tr('Keep my account')),
-              ),
-            ],
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: Text(tr('Delete my account')),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.of(c).maybePop(),
+              child: Text(tr('Keep my account')),
+            ),
           ],
         ),
       ),

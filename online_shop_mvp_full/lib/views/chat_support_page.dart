@@ -9,6 +9,9 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/app_settings.dart';
+import '../services/chat_store.dart';
+import '../services/support_bot.dart';
 
 /// One chat message. [type] is 'text', 'image', 'video' or 'voice'.
 /// [text] holds the text, [path] a local file path, [url] a remote URL
@@ -35,6 +38,33 @@ class ChatMessage {
 
   /// Preferred source for playback: local file first, then network URL.
   String get mediaSource => path ?? url ?? '';
+
+  /// Serialize for [ChatStore] persistence. Local media files (paths) are
+  /// NOT saved — temp files are gone after a restart — only text content
+  /// and remote URLs survive; media bubbles restore as their caption text.
+  Map<String, dynamic> toJson() => {
+        'fromUser': fromUser,
+        'type': type,
+        'text': text,
+        if (url != null) 'url': url,
+        if (secs > 0) 'secs': secs,
+      };
+
+  /// Restored messages are always renderable: a media bubble whose local
+  /// file is gone (paths are not persisted) becomes its caption text.
+  factory ChatMessage.fromJson(Map<String, dynamic> j) {
+    final type = j['type']?.toString() ?? 'text';
+    final url = j['url']?.toString();
+    final text = j['text']?.toString() ?? '';
+    final renderable = type == 'text' || (url != null && url.isNotEmpty);
+    return ChatMessage(
+      fromUser: j['fromUser'] == true,
+      type: renderable ? type : 'text',
+      text: text,
+      url: url,
+      secs: (j['secs'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 /// A live bot "typing" bubble is rendered from a placeholder message whose
@@ -52,6 +82,11 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   final List<ChatMessage> _msgs = [];
+
+  // The support "brain": understands the question, remembers the
+  // conversation and varies its answers (created in initState, where the
+  // localizations are available).
+  SupportBot? _bot;
 
   // --- attachments preview state ------------------------------------------
   XFile? _pendingImage;
@@ -75,60 +110,84 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
   VideoPlayerController? _videoCtl;
 
   bool get _hasPendingMedia => _pendingImage != null || _pendingVideo != null;
-  bool get _recording => _recordingPath != null;
-
-  // --------------------------------------------------------------------------
-  // Seeded conversation (mirrors the previous support page)
+  bool get _recording => _recordingPath != null;  // --------------------------------------------------------------------------
+  // Conversation start: restore a saved chat, or seed the welcome messages
   // --------------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final tr = AppLocalizations.of(context).t;
+      _bot = SupportBot(AppLocalizations.of(context));
+      _startConversation();
+    });
+  }
+
+  /// Restore this account's saved conversation; a fresh account gets the
+  /// standard welcome + quick-topic seed (which is then saved too, so it
+  /// becomes part of the restored history next time).
+  Future<void> _startConversation() async {
+    final u = AppSettings.restoredUser;
+    final accountKey = (u == null || u.username.trim().isEmpty)
+        ? 'anon'
+        : AppSettings.profileKeyOf(u);
+    final saved = await ChatStore.instance.load(accountKey);
+    if (!mounted) return;
+    if (saved.isNotEmpty) {
+      // Continue exactly where the user left off.
       setState(() {
-        _msgs.addAll([
-          ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'Hello! Welcome to Global Online support. How can I help you today?')),
-          ChatMessage(
-              fromUser: true, type: 'text', text: tr('Track my order')),
-          ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'You can view order status in Profile → Order History. Invoices are sent to your email, and delivery updates arrive by SMS and Telegram.')),
-          ChatMessage(
-              fromUser: true,
-              type: 'text',
-              text: tr('Shipping and delivery')),
-          ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'Shipping takes 2–5 working days. Delivery is free for orders over the minimum and you can follow the courier link from your order details.')),
-          ChatMessage(
-              fromUser: true,
-              type: 'text',
-              text: tr('Returns and refunds')),
-          ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'Returns are accepted within 7 days with the item unused and its original packaging. Refunds are processed within 3–5 working days after we receive the item.')),
-          ChatMessage(
-              fromUser: true, type: 'text', text: tr('Payment methods')),
-          ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'We accept cash on delivery, credit/debit cards, KHQR, and mobile banking. Choose your payment method at checkout.')),
-        ]);
+        _msgs
+          ..clear()
+          ..addAll(saved);
       });
       _scrollDown();
-    });
+      return;
+    }
+    // Fresh conversation: seed the welcome messages and remember them.
+    final tr = AppLocalizations.of(context).t;
+    final seed = [
+      ChatMessage(
+          fromUser: false,
+          type: 'text',
+          text: tr(
+              'Hello! Welcome to Global Online support. How can I help you today?')),
+      ChatMessage(fromUser: true, type: 'text', text: tr('Track my order')),
+      ChatMessage(
+          fromUser: false,
+          type: 'text',
+          text: tr(
+              'You can view order status in Profile → Order History. Invoices are sent to your email, and delivery updates arrive by SMS and Telegram.')),
+      ChatMessage(
+          fromUser: true, type: 'text', text: tr('Shipping and delivery')),
+      ChatMessage(
+          fromUser: false,
+          type: 'text',
+          text: tr(
+              'Shipping takes 2–5 working days. Delivery is free for orders over the minimum and you can follow the courier link from your order details.')),
+      ChatMessage(
+          fromUser: true, type: 'text', text: tr('Returns and refunds')),
+      ChatMessage(
+          fromUser: false,
+          type: 'text',
+          text: tr(
+              'Returns are accepted within 7 days with the item unused and its original packaging. Refunds are processed within 3–5 working days after we receive the item.')),
+      ChatMessage(
+          fromUser: true, type: 'text', text: tr('Payment methods')),
+      ChatMessage(
+          fromUser: false,
+          type: 'text',
+          text: tr(
+              'We accept cash on delivery, credit/debit cards, KHQR, and mobile banking. Choose your payment method at checkout.')),
+    ];
+    setState(() => _msgs.addAll(seed));
+    unawaited(ChatStore.instance.saveAll(_msgs));
+    _scrollDown();
+  }
+
+  /// Persist [m] right away (fire-and-forget; the chat never waits on I/O).
+  void _remember(ChatMessage m) {
+    if (m.text == _typingSentinel) return;
+    unawaited(ChatStore.instance.append(m));
   }
 
   @override
@@ -143,6 +202,49 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     _scroll.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  // --------------------------------------------------------------------------
+  // Clear chat (delete the saved conversation and start fresh)
+  // --------------------------------------------------------------------------
+  Future<void> _confirmClearChat() async {
+    final tr = AppLocalizations.of(context).t;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dc) => AlertDialog(
+        title: Text(tr('Clear chat')),
+        content: Text(tr(
+            'This deletes the whole conversation on this device. Continue?')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dc, false),
+            child: Text(tr('Cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dc).colorScheme.error),
+            onPressed: () => Navigator.pop(dc, true),
+            child: Text(tr('Clear')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await ChatStore.instance.clear();
+    _bot?.reset();
+    if (!mounted) return;
+    final tr2 = AppLocalizations.of(context).t;
+    setState(() {
+      _msgs
+        ..clear()
+        ..add(ChatMessage(
+            fromUser: false,
+            type: 'text',
+            text: tr2(
+                'Hello! Welcome to Global Online support. How can I help you today?')));
+    });
+    unawaited(ChatStore.instance.saveAll(_msgs));
+    _scrollDown();
   }
 
   // --------------------------------------------------------------------------
@@ -166,11 +268,11 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     if (text.isEmpty) return;
     _input.clear();
     _focus.unfocus();
-    setState(() {
-      _msgs.add(ChatMessage(fromUser: true, type: 'text', text: text));
-    });
+    final m = ChatMessage(fromUser: true, type: 'text', text: text);
+    setState(() => _msgs.add(m));
+    _remember(m);
     _scrollDown();
-    _botReply();
+    _botReply(userText: text);
   }
 
   Future<void> _sendPendingMedia() async {
@@ -179,12 +281,16 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     if (img == null && vid == null) return;
     setState(() {
       if (img != null) {
-        _msgs.add(ChatMessage(
-            fromUser: true, type: 'image', path: img.path, text: _input.text.trim()));
+        final m = ChatMessage(
+            fromUser: true, type: 'image', path: img.path, text: _input.text.trim());
+        _msgs.add(m);
+        _remember(m);
       }
       if (vid != null) {
-        _msgs.add(ChatMessage(
-            fromUser: true, type: 'video', path: vid.path, text: _input.text.trim()));
+        final m = ChatMessage(
+            fromUser: true, type: 'video', path: vid.path, text: _input.text.trim());
+        _msgs.add(m);
+        _remember(m);
       }
       _pendingImage = null;
       _pendingVideo = null;
@@ -195,9 +301,9 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
   }
 
   // --------------------------------------------------------------------------
-  // Bot reply (simulated agent)
+  // Bot reply (answers the actual question + remembers the conversation)
   // --------------------------------------------------------------------------
-  void _botReply() {
+  void _botReply({String? userText}) {
     Future.delayed(const Duration(milliseconds: 700), () {
       if (!mounted) return;
       setState(() => _msgs.add(ChatMessage(
@@ -206,25 +312,33 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     });
     Future.delayed(const Duration(milliseconds: 1900), () {
       if (!mounted) return;
+      // Answer the user's ACTUAL message from the knowledge base — with
+      // conversation memory, follow-up handling and answer variation.
+      final bot = _bot;
+      final answer = bot == null
+          ? ''
+          : bot.reply(userText ?? _lastUserText);
       final i = _msgs.indexWhere((m) => m.text == _typingSentinel && !m.fromUser);
-      final tr = AppLocalizations.of(context).t;
+      final bubble = ChatMessage(fromUser: false, type: 'text', text: answer);
       setState(() {
         if (i >= 0) {
-          _msgs[i] = ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'Thanks for your message! Our team will reply as soon as possible. In the meantime you can find quick answers in the topics above.'));
+          _msgs[i] = bubble;
         } else {
-          _msgs.add(ChatMessage(
-              fromUser: false,
-              type: 'text',
-              text: tr(
-                  'Thanks for your message! Our team will reply as soon as possible. In the meantime you can find quick answers in the topics above.')));
+          _msgs.add(bubble);
         }
       });
+      _remember(bubble);
       _scrollDown();
     });
+  }
+
+  /// The most recent text the user typed — used by voice/media messages so
+  /// a spoken question still gets a real answer.
+  String get _lastUserText {
+    for (final m in _msgs.reversed) {
+      if (m.fromUser && m.text.trim().isNotEmpty) return m.text;
+    }
+    return '';
   }
 
   // --------------------------------------------------------------------------
@@ -308,10 +422,10 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
         return;
       }
       if (p == null) return;
-      setState(() {
-        _msgs.add(ChatMessage(
-            fromUser: true, type: 'voice', path: p, secs: secs < 1 ? 1 : secs));
-      });
+      final m = ChatMessage(
+          fromUser: true, type: 'voice', path: p, secs: secs < 1 ? 1 : secs);
+      setState(() => _msgs.add(m));
+      _remember(m);
       _scrollDown();
       _botReply();
     } catch (_) {
@@ -434,10 +548,15 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
         if (didPop) return;
         await _stopRecording(send: false);
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            children: [
+      child: Scaffold(        appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: tr('Clear chat'),
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: _confirmClearChat,
+            ),
+          ],
+          title: Row(children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(

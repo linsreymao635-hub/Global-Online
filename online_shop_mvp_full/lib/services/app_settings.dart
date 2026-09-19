@@ -11,6 +11,15 @@ class AppSettings {
   static bool get notificationsOff => !_notifications;
   static const _sessionKey = 'session_user';
   static User? restoredUser;
+
+  /// True when the restored/signed-in account was confirmed to exist in the
+  /// shared cloud directory (`app_users`). Set at login/signup when the cloud
+  /// read or write succeeded. Only cloud-verified sessions can be
+  /// auto-logged-out when the admin deletes the account — a device-local
+  /// account (created offline, never mirrored) has no cloud row to check, so
+  /// it must never be treated as "deleted".
+  static const _sessionCloudKey = 'session_cloud_ok';
+  static bool sessionCloudOk = false;
   static const _addressKey = 'saved_address';
 
   /// Delivery addresses stored PER ACCOUNT (keyed by [profileKeyOf]) so one
@@ -69,6 +78,18 @@ class AppSettings {
   static Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     _notifications = p.getBool(_notificationsKey) ?? true;
+    _storeName = p.getString(_storeNameKey) ?? 'Global Online';
+    _storeEmail = p.getString(_storeEmailKey) ?? '';
+    _storePhone = p.getString(_storePhoneKey) ?? '';
+    _storeAddress = p.getString(_storeAddressKey) ?? '';
+    _currency = p.getString(_currencyKey) ?? '\$';
+    _taxRate = double.tryParse(p.getString(_taxRateKey) ?? '') ?? 0;
+    _shippingFee = double.tryParse(p.getString(_shippingFeeKey) ?? '') ?? 0;
+    _autoCancelOrders = p.getBool(_autoCancelKey) ?? false;
+    _autoCancelDays = int.tryParse(p.getString(_autoCancelDaysKey) ?? '') ?? 7;
+    _emailNotifications = p.getBool(_emailNotificationsKey) ?? true;
+    _newOrderNotifications = p.getBool(_newOrderNotificationsKey) ?? true;
+    _language = p.getString(_languageKey) ?? 'en';
     _googleClientId = p.getString(_googleClientIdKey) ?? '';
     _googleAndroidClientId = p.getString(_googleAndroidClientIdKey) ?? '';
     _telegramBot = p.getString(_telegramBotKey) ?? '';
@@ -92,6 +113,7 @@ class AppSettings {
       }
     }
     final la = p.getString(_authKey);
+    sessionCloudOk = p.getBool(_sessionCloudKey) ?? false;
     if (la != null) {
       try {
         final m = jsonDecode(la) as Map<String, dynamic>;
@@ -157,6 +179,134 @@ class AppSettings {
     await p.setBool(_notificationsKey, v);
   }
 
+  // ------------------------------------------------------- admin store settings
+
+  static const _storeNameKey = 'admin_store_name';
+  static String _storeName = 'Global Online';
+  static const _storeEmailKey = 'admin_store_email';
+  static String _storeEmail = '';
+  static const _storePhoneKey = 'admin_store_phone';
+  static String _storePhone = '';
+  static const _storeAddressKey = 'admin_store_address';
+  static String _storeAddress = '';
+  static const _currencyKey = 'admin_currency';
+  static String _currency = '\$';
+  static const _taxRateKey = 'admin_tax_rate';
+  static double _taxRate = 0;
+  static const _shippingFeeKey = 'admin_shipping_fee';
+  static double _shippingFee = 0;
+  static const _autoCancelKey = 'admin_auto_cancel_orders';
+  static bool _autoCancelOrders = false;
+  static const _autoCancelDaysKey = 'admin_auto_cancel_days';
+  static int _autoCancelDays = 7;
+  static const _emailNotificationsKey = 'admin_email_notifications';
+  static bool _emailNotifications = true;
+  static const _newOrderNotificationsKey = 'admin_new_order_notifications';
+  static bool _newOrderNotifications = true;
+  static const _languageKey = 'admin_language';
+  static String _language = 'en';
+
+  static String get storeName => _storeName;
+  static String get storeEmail => _storeEmail;
+  static String get storePhone => _storePhone;
+  static String get storeAddress => _storeAddress;
+  static String get currency => _currency;
+  static double get taxRate => _taxRate;
+  static double get shippingFee => _shippingFee;
+  static bool get autoCancelOrders => _autoCancelOrders;
+  static int get autoCancelDays => _autoCancelDays;
+  static bool get emailNotifications => _emailNotifications;
+  static bool get newOrderNotifications => _newOrderNotifications;
+  static String get language => _language;
+
+  static Future<void> saveStoreName(String v) async {
+    _storeName = v.trim().isEmpty ? 'Global Online' : v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_storeNameKey, _storeName);
+  }
+
+  static Future<void> saveStoreEmail(String v) async {
+    _storeEmail = v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_storeEmailKey, _storeEmail);
+  }
+
+  static Future<void> saveStorePhone(String v) async {
+    _storePhone = v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_storePhoneKey, _storePhone);
+  }
+
+  static Future<void> saveStoreAddress(String v) async {
+    _storeAddress = v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_storeAddressKey, _storeAddress);
+  }
+
+  static Future<void> saveCurrency(String v) async {
+    _currency = v.trim().isEmpty ? '\$' : v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_currencyKey, _currency);
+  }
+
+  static Future<void> saveTaxRate(double v) async {
+    _taxRate = v < 0 ? 0 : v;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_taxRateKey, _taxRate.toString());
+  }
+
+  static Future<void> saveShippingFee(double v) async {
+    _shippingFee = v < 0 ? 0 : v;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_shippingFeeKey, _shippingFee.toString());
+  }
+
+  static Future<void> saveAutoCancel(bool on, int days) async {
+    _autoCancelOrders = on;
+    _autoCancelDays = days < 1 ? 7 : days;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_autoCancelKey, _autoCancelOrders);
+    await p.setString(_autoCancelDaysKey, _autoCancelDays.toString());
+  }
+
+  static Future<void> saveEmailNotifications(bool v) async {
+    _emailNotifications = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_emailNotificationsKey, v);
+  }
+
+  static Future<void> saveNewOrderNotifications(bool v) async {
+    _newOrderNotifications = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_newOrderNotificationsKey, v);
+  }
+
+  static Future<void> saveLanguage(String v) async {
+    _language = v == 'km' ? 'km' : 'en';
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_languageKey, _language);
+  }
+
+  // ------------------------------------------------------------ activity log
+
+  static const _activityKey = 'admin_activity_log';
+
+  /// The most recent admin actions, newest first, persisted on this device
+  /// (in 3.100 the list source fields are carried as static const keys).
+  static Future<List<String>> loadActivityLog() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getStringList(_activityKey) ?? [];
+  }
+
+  /// Append one admin action and keep only the newest 50 entries.
+  static Future<void> logAdminActivity(String entry) async {
+    final p = await SharedPreferences.getInstance();
+    final list = p.getStringList(_activityKey) ?? <String>[];
+    list.insert(0, '[${DateTime.now().toLocal().toString().substring(0, 16)}] $entry');
+    if (list.length > 50) list.length = 50;
+    await p.setStringList(_activityKey, list);
+  }
+
   static Future<void> saveSession(User u) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(
@@ -174,10 +324,21 @@ class AppSettings {
         }));
   }
 
+  /// Record whether the current session's account exists in the cloud
+  /// directory. In-memory first so callers that do not await it still see
+  /// the new value immediately.
+  static Future<void> markSessionCloudOk(bool ok) async {
+    sessionCloudOk = ok;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_sessionCloudKey, ok);
+  }
+
   static Future<void> clearSession() async {
     restoredUser = null;
+    sessionCloudOk = false;
     final p = await SharedPreferences.getInstance();
     await p.remove(_sessionKey);
+    await p.remove(_sessionCloudKey);
   }
 
   /// Key identifying the account a saved profile belongs to.

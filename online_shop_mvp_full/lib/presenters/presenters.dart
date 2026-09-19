@@ -95,14 +95,28 @@ class OrderPresenter {
   /// Used to block account deletion until those orders are settled.
   bool get hasPending => orders.any((o) => o.status == 'Processing');
 
-  /// Restore orders: cloud first (shared across devices/admin), merged with
-  /// any device-only orders (e.g. created while offline).
-  Future<void> load() async {
+  /// Restore this account's orders.
+  ///
+  /// Fetched fresh from the cloud every time (shared with the admin panel —
+  /// statuses the admin changes are picked up here immediately), merged
+  /// with any device-only orders (e.g. created while offline). [owner]
+  /// limits the fetch to this account's orders so one user never sees (or
+  /// gets) another user's orders; null/empty loads everything (admin).
+  Future<void> load({String? owner}) async {
     orders.clear();
-    final cloud = await SupabaseService.instance.orders();
+    var cloud = const <Order>[];
+    if (!SupabaseService.testMode) {
+      cloud = await SupabaseService.instance.orders(owner: owner);
+    }
     final local = await AppSettings.loadAllOrders();
+    final mine = owner == null || owner.isEmpty;
     final seen = <String>{};
     for (final o in [...cloud, ...local]) {
+      // Device-local orders must match the account too, so a shared phone
+      // does not leak one account's orders into another's history. Legacy
+      // local rows with no owner at all stay visible to everyone (they
+      // predate per-account ownership).
+      if (!(mine || o.owner.isEmpty || o.owner == owner)) continue;
       if (seen.add(o.id)) orders.add(o);
     }
   }
@@ -127,14 +141,19 @@ class OrderPresenter {
 
   /// Update the status of an order (used by the Admin panel) — locally and
   /// in the shared cloud.
-  Future<void> setStatus(String id, String status) async {
+  ///
+  /// Returns true when the cloud write succeeded, so the admin UI can warn
+  /// instead of silently pretending the shopper will see the new status.
+  /// The local cache is NOT rewritten wholesale here: it holds every
+  /// account's orders on this device, and overwriting it from the admin's
+  /// in-memory list could clobber other users' data.
+  Future<bool> setStatus(String id, String status) async {
     for (var i = 0; i < orders.length; i++) {
       if (orders[i].id == id && orders[i].status != status) {
         orders[i] = orders[i].copyWith(status: status);
         break;
       }
     }
-    await AppSettings.saveAllOrders(orders);
-    await SupabaseService.instance.updateOrderStatus(id, status);
+    return SupabaseService.instance.updateOrderStatus(id, status);
   }
 }

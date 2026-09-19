@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +8,7 @@ import 'l10n/app_localizations.dart';
 import 'services/api_service.dart';
 import 'services/app_settings.dart';
 import 'services/google_auth_service.dart';
+import 'services/supabase_service.dart';
 import 'repositories/repositories.dart';
 import 'presenters/presenters.dart';
 import 'models/models.dart';
@@ -62,6 +65,7 @@ class _ShopAppState extends State<ShopApp> {
     }
     AppSettings.saveSession(u);
     setState(() => user = u);
+    _startAccountWatch(u);
     _maybeOpenAdmin(u);
   }
 
@@ -83,6 +87,7 @@ class _ShopAppState extends State<ShopApp> {
   }
 
   void logout() {
+    _stopAccountWatch();
     AppSettings.clearSession();
     // Also disconnect Google so the next "Continue with Google" shows the
     // account picker again instead of silently reusing the previous account.
@@ -105,8 +110,95 @@ class _ShopAppState extends State<ShopApp> {
         return;
       }
       setState(() => user = restored);
+      _startAccountWatch(restored);
       // A restored admin session also opens the dashboard right away.
       _maybeOpenAdmin(restored);
+    }
+  }
+
+  @override
+  void dispose() {
+    _accountPoll?.cancel();
+    super.dispose();
+  }
+
+  // ------------------------------------------------- deleted account watch
+
+  /// When the admin deletes this account from the Users page, the shopper
+  /// must be logged out AUTOMATICALLY — no restart, no manual sign-out.
+  ///
+  /// Two signals drive it, matching the live-feedback pattern in the admin
+  /// panel: a Supabase realtime DELETE event pushes instantly, and a quiet
+  /// 30s cloud poll is the fallback (realtime may be off or delayed).
+  Timer? _accountPoll;
+  String? _watchedUsername;
+
+  /// Start watching the cloud directory for the deletion of [u]'s account.
+  /// Guests and admins can never be deleted from the Users page, and a
+  /// device-local account (created offline, never confirmed in the cloud
+  /// directory) has no cloud row to check — none of them may ever be
+  /// treated as "deleted", so the watch simply does not start for them.
+  void _startAccountWatch(User u) {
+    _stopAccountWatch();
+    if (u.isAdmin) return;
+    final uname = u.username.trim().toLowerCase();
+    if (uname.isEmpty || uname == 'guest') return;
+    if (!AppSettings.sessionCloudOk) return;
+    _watchedUsername = uname;
+    SupabaseService.instance
+        .watchUsers(onDelete: _onAccountDeletedRemotely);
+    _accountPoll = Timer.periodic(
+        const Duration(seconds: 30), (_) => _checkAccountStillExists());
+  }
+
+  void _stopAccountWatch() {
+    _accountPoll?.cancel();
+    _accountPoll = null;
+    if (_watchedUsername != null) {
+      _watchedUsername = null;
+      SupabaseService.instance.cancelUsersWatch();
+    }
+  }
+
+  /// Realtime push: a cloud account row was deleted. Only acts when it is
+  /// the account signed in on THIS device.
+  void _onAccountDeletedRemotely(String username) {
+    final u = user;
+    if (u == null || u.isAdmin) return;
+    if (username.trim().toLowerCase() !=
+        u.username.trim().toLowerCase()) {
+      return;
+    }
+    _forceLogoutForDeletedAccount();
+  }
+
+  /// Polling fallback: quietly confirm the signed-in account still exists.
+  /// `userExists` answers null when the cloud is unreachable, so being
+  /// offline NEVER logs anybody out.
+  Future<void> _checkAccountStillExists() async {
+    final u = user;
+    final watched = _watchedUsername;
+    if (u == null || watched == null || u.isAdmin) return;
+    if (watched != u.username.trim().toLowerCase()) return;
+    final exists = await SupabaseService.instance.userExists(watched);
+    if (exists == false) _forceLogoutForDeletedAccount();
+  }
+
+  /// The signed-in account was deleted by the admin: clear the session so
+  /// the app root swaps to the LOGIN page and tell the shopper why.
+  void _forceLogoutForDeletedAccount() {
+    if (!mounted) return;
+    final u = user;
+    if (u == null || u.isAdmin) return;
+    _stopAccountWatch();
+    final ctx = _navKey.currentContext;
+    logout();
+    if (ctx != null) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          width: 340,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+              AppLocalizations.of(ctx).t('Your account has been deleted'))));
     }
   }
 

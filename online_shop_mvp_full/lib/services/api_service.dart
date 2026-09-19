@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:io' show Platform;
 
@@ -62,12 +63,72 @@ class ApiService {
   }
 
   List<Product>? _all;
+
+  /// Products that live only on this device (added while the cloud was
+  /// unreachable, or saved under an id the cloud does not know). They are
+  /// merged on top of every catalog source so an admin edit can never be
+  /// "lost" by a refresh, a search or the demo API overwriting the cache.
+  static const _localProductsKey = 'local_products_v1';
+
+  Future<List<Product>> _loadLocalProducts() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_localProductsKey);
+    if (raw == null) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map((e) => Product.fromJson((e as Map).cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _saveLocalProducts(List<Product> locals) async {
+    final p = await SharedPreferences.getInstance();
+    if (locals.isEmpty) {
+      await p.remove(_localProductsKey);
+      return;
+    }
+    await p.setString(_localProductsKey, jsonEncode(locals.map(_productJson).toList()));
+  }
+
+  static Map<String, dynamic> _productJson(Product e) => {
+        'id': e.id,
+        'title': e.title,
+        'price': e.price,
+        'discountPercentage': e.discountPercentage,
+        'rating': e.rating,
+        'stock': e.stock,
+        'brand': e.brand,
+        'category': e.category,
+        'description': e.description,
+        'thumbnail': e.thumbnail,
+        'images': e.images,
+        'status': e.status,
+        'verified': e.verified,
+      };
+
+  /// Merge [locals] (device-only products/edits) over [source], newest
+  /// first. A local product wins over a same-id catalog row (it holds the
+  /// admin's edits); purely local products (negative id or unknown id) are
+  /// added at the top.
+  static List<Product> _mergeLocal(List<Product> locals, List<Product> source) {
+    if (locals.isEmpty) return source;
+    final byId = {for (final l in locals) l.id: l};
+    final merged = <Product>[
+      ...locals,
+      ...source.where((s) => !byId.containsKey(s.id)),
+    ];
+    return merged;
+  }
+
   Future<List<Product>> getProducts() async {
     if (_all != null) return _all!;
+    final locals = await _loadLocalProducts();
     // 1) Shared cloud catalog first — admin edits reach every device.
     final cloud = await supa.products();
     if (cloud.isNotEmpty) {
-      _all = cloud;
+      _all = _mergeLocal(locals, cloud);
       return _all!;
     }
     // 2) Offline / empty-cloud fallback: dummyjson + local cache.
@@ -76,13 +137,24 @@ class ApiService {
       final r = await http.get(Uri.parse('$baseUrl/products?limit=200'));
       _ok(r);
       final j = jsonDecode(r.body);
-      _all = (j['products'] as List).map((e) => Product.fromJson(e)).toList();
+      final catalog =
+          (j['products'] as List).map((e) => Product.fromJson(e)).toList();
+      // Store the demo catalog separately — the admin's own products/edits
+      // live in _localProductsKey and must NEVER be overwritten by it.
       await p.setString(_cacheKey, jsonEncode(j['products']));
+      _all = _mergeLocal(locals, catalog);
       return _all!;
     } catch (e) {
       final c = p.getString(_cacheKey);
       if (c != null) {
-        _all = (jsonDecode(c) as List).map((e) => Product.fromJson(e)).toList();
+        final cached =
+            (jsonDecode(c) as List).map((e) => Product.fromJson(e)).toList();
+        _all = _mergeLocal(locals, cached);
+        return _all!;
+      }
+      // Nothing cached either — still show the device-only products.
+      if (locals.isNotEmpty) {
+        _all = locals;
         return _all!;
       }
       rethrow;
@@ -152,6 +224,9 @@ class ApiService {
       // Empty hash = social-login-only account (Google/Telegram): it can only
       // sign in through its provider, never with a typed password.
       if (stored.isNotEmpty && stored == SupabaseService.hashPassword(p)) {
+        // The account exists in the shared cloud directory: remember it so
+        // the session can be auto-logged-out if the admin deletes it.
+        await AppSettings.markSessionCloudOk(true);
         return User.fromSupabase(cloud);
       }
       return null; // wrong password, or passwordless cloud account
@@ -161,7 +236,7 @@ class ApiService {
     if (local != null) {
       if (local['password'] == p) {
         // Mirror the account into the cloud so other devices can see it.
-        await supa.upsertUser({
+        final ok = await supa.upsertUser({
           'username': key,
           'first_name': local['firstName'] as String? ?? '',
           'last_name': local['lastName'] as String? ?? '',
@@ -172,6 +247,10 @@ class ApiService {
           'is_admin': false,
           'password_hash': SupabaseService.hashPassword(p),
         });
+        // A confirmed cloud write means the session is cloud-verified; a
+        // failed one (offline) leaves it unverified — such a session can
+        // never be auto-logged-out (there is nothing to check against).
+        await AppSettings.markSessionCloudOk(ok);
         return User(
             id: (local['id'] as num?)?.toInt() ?? 0,
             firstName: local['firstName'] as String? ?? '',
@@ -191,7 +270,7 @@ class ApiService {
     if (r.statusCode != 200) return null;
     final apiUser = User.fromJson(jsonDecode(r.body));
     // Mirror successful dummyjson logins into the cloud directory too.
-    await supa.upsertUser({
+    final mirrored = await supa.upsertUser({
       'username': apiUser.username.trim().toLowerCase(),
       'first_name': apiUser.firstName,
       'last_name': apiUser.lastName,
@@ -201,6 +280,7 @@ class ApiService {
       'provider': 'local',
       'is_admin': false,
     });
+    await AppSettings.markSessionCloudOk(mirrored);
     return apiUser;
   }
 
@@ -229,6 +309,8 @@ class ApiService {
         email: e,
         phone: ph);
     if (!inserted) return null; // cloud down → old dummyjson path
+    // New account is now in the shared cloud directory.
+    await AppSettings.markSessionCloudOk(true);
     return User(
         id: 0,
         firstName: f,
@@ -249,41 +331,20 @@ class ApiService {
   // see (getProducts/search/category) and persisted in the local cache.
   // ---------------------------------------------------------------------
 
-  Future<void> _persistProducts() async {
-    if (_all == null) return;
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_cacheKey, jsonEncode(_all!.map((e) => {
-              'id': e.id,
-              'title': e.title,
-              'price': e.price,
-              'discountPercentage': e.discountPercentage,
-              'rating': e.rating,
-              'stock': e.stock,
-              'brand': e.brand,
-              'category': e.category,
-              'description': e.description,
-              'thumbnail': e.thumbnail,
-              'images': e.images,
-            }).toList()));
-  }
-
-  /// Add a product created by the admin. First written to the shared cloud
-  /// catalog; locally-created products get a negative id so they never clash
-  /// with catalog ids when offline.
+  /// Add a product created by the admin. The new product shows up
+  /// INSTANTLY (device store + in-memory list) and the upload to the
+  /// shared cloud catalog runs in the background, so the Save dialog never
+  /// waits for the network. Locally-created products get a temporary
+  /// negative id so they never clash with catalog ids.
   Future<void> addProduct(Product p) async {
-    final ok = await supa.addProduct(p);
-    if (ok) {
-      _all = null; // re-fetch the shared catalog next time
-      return;
-    }
-    // Offline fallback: device-local only.
     final all = await getProducts();
     var nextLocal = -1;
     for (final x in all) {
       if (x.id < 0 && x.id < nextLocal) nextLocal = x.id - 1;
     }
+    final id = p.id < 0 ? p.id : nextLocal;
     final copy = Product(
-        id: p.id < 0 ? p.id : nextLocal,
+        id: id,
         title: p.title,
         price: p.price,
         discountPercentage: p.discountPercentage,
@@ -293,34 +354,85 @@ class ApiService {
         category: p.category,
         description: p.description,
         thumbnail: p.thumbnail,
-        images: p.images);
-    all.insert(0, copy);
-    await _persistProducts();
-  }
-
-  Future<void> updateProduct(Product p) async {
-    final ok = await supa.updateProduct(p);
-    if (ok) {
-      _all = null; // re-fetch the shared catalog next time
-      return;
-    }
-    final all = await getProducts();
-    final i = all.indexWhere((x) => x.id == p.id);
-    if (i < 0) return;
-    all[i] = p;
-    await _persistProducts();
-  }
-
-  Future<void> deleteProduct(int id) async {
-    final ok = await supa.deleteProduct(id);
-    if (ok) {
+        images: p.images,
+        status: p.status,
+        verified: p.verified);
+    // Keep device-only products in their own store so catalog refreshes
+    // (search, demo API, cache) can never overwrite them.
+    final locals = await _loadLocalProducts();
+    locals.removeWhere((x) => x.id == id);
+    locals.insert(0, copy);
+    await _saveLocalProducts(locals);
+    _all?.removeWhere((x) => x.id == id);
+    _all?.insert(0, copy);
+    // Background upload — on success the real cloud row (with its cloud
+    // id) replaces the temporary local copy on the next refresh.
+    unawaited(_backgroundCloudSync(() async {
+      final row = await supa.addProductRow(p);
+      if (row == null) return;
+      final l = await _loadLocalProducts();
+      l.removeWhere((x) => x.id == id);
+      await _saveLocalProducts(l);
       _all = null;
-      return;
+    }));
+  }
+
+  /// Update a product. The edit is applied to the on-screen list and the
+  /// device store FIRST (so it shows and survives refreshes immediately);
+  /// the shared-cloud write happens in the background.
+  Future<void> updateProduct(Product p) async {
+    if (_all != null) {
+      final j = _all!.indexWhere((x) => x.id == p.id);
+      if (j >= 0) {
+        _all![j] = p;
+      } else {
+        _all!.insert(0, p);
+      }
     }
-    if (_all == null) await getProducts();
-    if (_all == null) return;
-    _all!.removeWhere((x) => x.id == id);
-    await _persistProducts();
+    final locals = await _loadLocalProducts();
+    final i = locals.indexWhere((x) => x.id == p.id);
+    if (i >= 0) {
+      locals[i] = p;
+    } else {
+      locals.insert(0, p);
+    }
+    await _saveLocalProducts(locals);
+    // Background sync — when the cloud confirms the row, the device-only
+    // copy is dropped and the next load refetches the shared catalog.
+    unawaited(_backgroundCloudSync(() async {
+      final ok = await supa.updateProduct(p);
+      if (!ok) return;
+      final l = await _loadLocalProducts();
+      l.removeWhere((x) => x.id == p.id);
+      await _saveLocalProducts(l);
+      _all = null;
+    }));
+  }
+
+  /// Delete a product. Removed from the device list immediately; the
+  /// cloud delete runs in the background.
+  Future<void> deleteProduct(int id) async {
+    final locals = await _loadLocalProducts();
+    locals.removeWhere((x) => x.id == id);
+    await _saveLocalProducts(locals);
+    _all?.removeWhere((x) => x.id == id);
+    unawaited(_backgroundCloudSync(() => supa.deleteProduct(id)));
+  }
+
+  /// Bound on one background cloud sync attempt. The UI never waits for
+  /// these (saves are applied locally first) — this just stops a doomed
+  /// request from hanging around forever on a bad network.
+  static const _cloudSyncTimeout = Duration(seconds: 10);
+
+  /// Run a cloud write in the background with a timeout. Failures are
+  /// silent: the edit stays on this device and keeps winning in the merge
+  /// until the cloud accepts it.
+  Future<void> _backgroundCloudSync(Future<void> Function() op) async {
+    try {
+      await op().timeout(_cloudSyncTimeout);
+    } catch (_) {
+      // Offline / slow network — nothing to do; local copy already saved.
+    }
   }
 
   Future<List<Category>> categories() async {

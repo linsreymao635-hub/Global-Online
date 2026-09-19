@@ -1307,7 +1307,13 @@ class _Home extends State<HomePage> {
                           : null)));
                 }
                 if (v == 'orders') {
-                  Navigator.push(c, MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
+                  Navigator.push(
+                          c,
+                          MaterialPageRoute(
+                              builder: (_) => OrderPage(
+                                  orders: widget.orders,
+                                  owner: widget.user.username)))
+                      .then((_) => mounted ? setState(() {}) : null);
                 }
                 if (v == 'admin') {
                   // Admin panel is desktop-only (never opens on phones).
@@ -2829,8 +2835,12 @@ class _Profile extends State<ProfilePage> {
   }
 
   void _openOrders() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => OrderPage(orders: widget.orders)));
+    Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => OrderPage(
+                    orders: widget.orders, owner: widget.user.username)))
+        .then((_) => mounted ? setState(() {}) : null);
   }
 
   void _openAdmin() {
@@ -3714,14 +3724,61 @@ class SupportPage extends StatelessWidget {
   Widget build(BuildContext c) => const ChatSupportPage();
 }
 
-class OrderPage extends StatelessWidget {
+/// The shopper's Order History.
+///
+/// Data is reloaded fresh from the cloud every time the page opens (so the
+/// latest admin status is always shown, never stale local data), on
+/// pull-to-refresh, and live whenever the admin changes an order's status
+/// (Supabase realtime, with a 20s poll as fallback).
+class OrderPage extends StatefulWidget {
+  /// Username of the account whose history to show (empty = all/local).
+  final String owner;
   final OrderPresenter orders;
-  const OrderPage({super.key, required this.orders});
+  const OrderPage({super.key, required this.orders, this.owner = ''});
+  @override
+  State<OrderPage> createState() => _OrderPageState();
+}
+
+class _OrderPageState extends State<OrderPage> {
+  bool _loading = false;
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+    // Fallback when realtime is unavailable: quietly refetch every 20s.
+    _poll = Timer.periodic(const Duration(seconds: 20), (_) => _reload());
+    // Instant push when the admin updates an order status.
+    SupabaseService.instance
+        .watchOrders(onChanged: _reload);
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    SupabaseService.instance.cancelOrdersWatch();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    if (!mounted || _loading) return;
+    _loading = true;
+    try {
+      await widget.orders.load(owner: widget.owner);
+    } catch (_) {
+      // Offline — keep showing the last known data.
+    }
+    if (mounted) setState(() {});
+    _loading = false;
+  }
+
   @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
-    if (orders.orders.isEmpty) {
+    final orders = widget.orders.orders;
+    if (orders.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(tr('Order History'))),
         body: Center(
@@ -3739,130 +3796,210 @@ class OrderPage extends StatelessWidget {
     }
     return Scaffold(
       appBar: AppBar(title: Text(tr('Order History'))),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: orders.orders.length,
-        itemBuilder: (_, i) {
-          final o = orders.orders[i];
-          final statusColor = sch.primary;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: sch.outlineVariant)),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.shopping_bag_outlined, color: sch.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text('${tr('Order')} #${o.id}',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(o.status,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: sch.onPrimary)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(tr('Date') +
-                          ': ${o.date.toLocal().toString().split(' ')[0]}'),
-                    ],
-                  ),
-                  const Divider(height: 22),
-                  Text(tr('Items'),
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: sch.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  Column(
-                    children: o.items.map((it) {
-                      final p = it.product;
-                      final sub = it.subtotal.toStringAsFixed(2);
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(p.thumbnail,
-                                  width: 44, height: 44, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      const Icon(Icons.image)),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(p.title,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 14)),
-                            ),
-                            Text('×${it.quantity}  ',
-                                style:
-                                    TextStyle(color: sch.onSurfaceVariant)),
-                            Text('\$$sub',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const Divider(height: 10),
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(o.deliveryAddress,
-                            style: const TextStyle(fontSize: 13)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text(tr('Total'),
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600)),
-                      const Spacer(),
-                      Text('\$${o.total.toStringAsFixed(2)}',
-                          style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: sch.primary)),
-                    ],
-                  ),
-                ],
-              ),
-),
-          );
-        },
+      body: RefreshIndicator(
+        onRefresh: _reload,
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          itemCount: orders.length,
+          itemBuilder: (_, i) {
+            final o = orders[i];
+            return _orderCard(o, tr, sch);
+          },
+        ),
       ),
     );
+  }
+
+  Widget _orderCard(Order o, String Function(String) tr, ColorScheme sch) {
+    final statusColor = _statusColor(o.status);
+    // 0=Processing 1=Shipped 2=Delivered — 'Cancelled' orders show no bar.
+    final step = switch (o.status) {
+      'Shipped' => 1,
+      'Delivered' => 2,
+      _ => 0,
+    };
+    final cancelled = o.status == 'Cancelled';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: sch.outlineVariant)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shopping_bag_outlined, color: sch.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('${tr('Order')} #${o.id}',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(tr(o.status),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text(tr('Date') +
+                    ': ${o.date.toLocal().toString().split(' ')[0]}'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // ---------------------------------- order progress tracker
+            Row(children: [
+              _trackDot(step >= 1 && !cancelled, cancelled,
+                  Icons.local_shipping_outlined, tr('Shipped'), sch),
+              _trackLine(step >= 2 && !cancelled, cancelled, sch),
+              _trackDot(step >= 2 && !cancelled, cancelled,
+                  Icons.check_circle_outline, tr('Delivered'), sch),
+            ]),
+            const SizedBox(height: 4),
+            if (cancelled)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(tr('Cancelled'),
+                    style: TextStyle(
+                        fontSize: 12, color: _statusColor('Cancelled'))),
+              ),
+            const Divider(height: 22),
+            Text(tr('Items'),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: sch.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Column(
+              children: o.items.map((it) {
+                final p = it.product;
+                final sub = it.subtotal.toStringAsFixed(2);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(p.thumbnail,
+                            width: 44, height: 44, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.image)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(p.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14)),
+                      ),
+                      Text('×${it.quantity}  ',
+                          style:
+                              TextStyle(color: sch.onSurfaceVariant)),
+                      Text('\$$sub',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const Divider(height: 10),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on_outlined,
+                    size: 16, color: Colors.grey),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(o.deliveryAddress,
+                      style: const TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text(tr('Total'),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('\$${o.total.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: sch.primary)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One stop of the Shipped → Delivered progress tracker.
+  Widget _trackDot(
+      bool reached, bool cancelled, IconData icon, String label, ColorScheme sch) {
+    final color = cancelled
+        ? _statusColor('Cancelled')
+        : reached ? _statusColor('Delivered') : sch.outline;
+    return Column(children: [
+      Container(
+        width: 34,
+        height: 34,
+        decoration:
+            BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+        child: Icon(icon, size: 17, color: color),
+      ),
+      const SizedBox(height: 4),
+      Text(label, style: TextStyle(fontSize: 11, color: color)),
+    ]);
+  }
+
+  Widget _trackLine(bool reached, bool cancelled, ColorScheme sch) {
+    final color = cancelled
+        ? _statusColor('Cancelled')
+        : reached ? _statusColor('Delivered') : sch.outlineVariant;
+    return Expanded(
+      child: Container(
+        height: 3,
+        margin: const EdgeInsets.only(bottom: 18),
+        decoration: BoxDecoration(
+            color: color, borderRadius: BorderRadius.circular(2)),
+      ),
+    );
+  }
+
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'Processing':
+        return const Color(0xFFB45309);
+      case 'Shipped':
+        return const Color(0xFF1D4ED8);
+      case 'Delivered':
+        return const Color(0xFF15803D);
+      case 'Cancelled':
+        return const Color(0xFFB91C1C);
+      default:
+        return const Color(0xFF5B4FE9);
+    }
   }
 }
 

@@ -1,5 +1,6 @@
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/app_settings.dart';
 import '../services/google_auth_service.dart';
 import '../services/supabase_service.dart';
 
@@ -16,19 +17,20 @@ class AuthRepository {
     if (u == null) return null;
     // Register the Google account in the shared cloud directory so the admin
     // (and other devices) can see it. No password → it can only sign in via
-    // Google, never with a typed password.
-    SupabaseService.instance
-        .upsertUser({
-          'username': u.username.trim().toLowerCase(),
-          'first_name': u.firstName,
-          'last_name': u.lastName,
-          'email': u.email,
-          'phone': u.phone,
-          'image': u.image ?? '',
-          'provider': 'google',
-          'is_admin': false,
-        })
-        .catchError((_) => false);
+    // Google, never with a typed password. Awaited so we know whether the
+    // account is really in the cloud (drives delete auto-logout) and the
+    // async error does not slip through unawaited.
+    final ok = await SupabaseService.instance.upsertUser({
+      'username': u.username.trim().toLowerCase(),
+      'first_name': u.firstName,
+      'last_name': u.lastName,
+      'email': u.email,
+      'phone': u.phone,
+      'image': u.image ?? '',
+      'provider': 'google',
+      'is_admin': false,
+    }).catchError((_) => false);
+    await AppSettings.markSessionCloudOk(ok);
     return u;
   }
 }
@@ -78,10 +80,18 @@ Future<void> addCategory(String name,
   /// Delete a shop account (admin action).
   Future<void> deleteUser(String username) => supa.deleteUser(username);
 
+  /// Promote/demote an account to/from admin (Administration page). Returns
+  /// true when the cloud accepted the change.
+  Future<bool> setUserAdmin(String username, bool isAdmin) =>
+      supa.updateUserRole(username, isAdmin);
+
   /// Every order in the shop (not just this device's).
   Future<List<Order>> orders() => supa.orders();
 
-  Future<void> setOrderStatus(String id, String status) =>
+  /// Write the new status to the shared cloud. Returns true when the row
+  /// was actually updated — the admin panel surfaces a warning otherwise
+  /// (a failed write would leave the shopper's Order History stale).
+  Future<bool> setOrderStatus(String id, String status) =>
       supa.updateOrderStatus(id, status);
 
   /// Feedback left by shoppers across all devices.
