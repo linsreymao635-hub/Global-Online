@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -117,10 +118,10 @@ class _SocialButtonsState extends State<SocialButtons> {
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black87,
-              minimumSize: const Size.fromHeight(48),
+              minimumSize: const Size.fromHeight(52),
               side: BorderSide(color: Colors.grey.shade300),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(28)),
             ),
             onPressed: _busy ? null : _google,
             icon: _busy
@@ -132,30 +133,30 @@ class _SocialButtonsState extends State<SocialButtons> {
                     'https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/120px-Google_%22G%22_Logo.svg.png',
                     width: 20,
                     height: 20,
-                    errorBuilder: (_, __, ___) => const Icon(
-                        Icons.g_mobiledata,
-                        color: Colors.blue,
-                        size: 26),
+                    errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata,
+                        color: Colors.blue, size: 26),
                   ),
             label: Text(tr('Continue with Google'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF229ED9),
+              backgroundColor: const Color(0xFF2AABEE),
               foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
+              minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(28)),
             ),
             onPressed: _busy ? null : _telegram,
             icon: const Icon(Icons.send, size: 20),
             label: Text(tr('Continue with Telegram'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -278,6 +279,10 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
   final codeInput = TextEditingController();
   final npass = TextEditingController();
   final cpass = TextEditingController();
+  final fPhone = FocusNode();
+  final fCode = FocusNode();
+  final fNpass = FocusNode();
+  final fCpass = FocusNode();
   bool busy = false;
   bool show = false;
 
@@ -302,11 +307,31 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     await showDialog<void>(
       context: context,
       builder: (dc) => AlertDialog(
-        icon: const Icon(Icons.sms_outlined, size: 40, color: Colors.green),
-        title: Text(tr('Verification code')),
-        content: Text('${tr('We sent a code to')} ${phone.text.trim()}\n\n$code'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.sms_outlined, size: 30, color: Colors.green),
+        ),
+        title: Text(tr('Verification code'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(
+          '${tr('We sent a code to')} ${phone.text.trim()}\n\n$code',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              color: Theme.of(dc).colorScheme.primary),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () {
               Navigator.pop(dc);
               setState(() => step = 2);
@@ -352,10 +377,26 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     await showDialog<void>(
       context: context,
       builder: (dc) => AlertDialog(
-        icon: const Icon(Icons.check_circle_outline, size: 40, color: Colors.green),
-        title: Text(tr('Password reset successful')),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.check_circle_outline,
+              size: 32, color: Colors.green),
+        ),
+        title: Text(tr('Password reset successful'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(tr('You can now sign in with your new password.'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(dc).colorScheme.onSurfaceVariant)),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () {
               Navigator.pop(dc);
               Navigator.pop(context);
@@ -368,26 +409,47 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
   }
 
   Widget field(TextEditingController c, String t, IconData icon,
-          {bool obscure = false,
-          bool code_ = false,
-          TextInputType? keyboard,
-          List<TextInputFormatter>? formatters}) =>
-      TextField(
-        controller: c,
-        obscureText: obscure,
-        keyboardType: keyboard,
-        maxLength: code_ ? 6 : null,
-        inputFormatters: formatters,
-        style: const TextStyle(fontSize: 16),
-        decoration: InputDecoration(
-          labelText: t,
-          prefixIcon: Icon(icon),
-          filled: true,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none),
-        ),
-      );
+      {bool obscure = false,
+      bool code_ = false,
+      TextInputType? keyboard,
+      List<TextInputFormatter>? formatters,
+      Widget? suffix,
+      FocusNode? node,
+      bool autofocus = false,
+      TextInputAction? action,
+      ValueChanged<String>? onSubmit}) {
+    final sch = Theme.of(context).colorScheme;
+    final base = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: sch.outlineVariant));
+    return TextField(
+      controller: c,
+      focusNode: node,
+      autofocus: autofocus,
+      textInputAction: action,
+      onSubmitted: onSubmit,
+      obscureText: obscure,
+      keyboardType: keyboard,
+      maxLength: code_ ? 6 : null,
+      inputFormatters: formatters,
+      style: const TextStyle(fontSize: 16),
+      decoration: InputDecoration(
+        labelText: t,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: sch.surfaceContainerLowest,
+        counterText: '',
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        border: base,
+        enabledBorder: base,
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: sch.primary, width: 1.6)),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -395,6 +457,10 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     codeInput.dispose();
     npass.dispose();
     cpass.dispose();
+    fPhone.dispose();
+    fCode.dispose();
+    fNpass.dispose();
+    fCpass.dispose();
     super.dispose();
   }
 
@@ -402,108 +468,362 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
-    IconData icon = Icons.lock_reset;
-    String title = '';
-    Widget body = const SizedBox();
-    switch (step) {
-      case 1:
-        icon = Icons.sms_outlined;
-        title = tr('Enter your phone number to receive a verification code');
-        body = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            field(phone, tr('Phone'), Icons.phone_android,
-                keyboard: TextInputType.phone,
-                formatters: [FilteringTextInputFormatter.digitsOnly]),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: busy ? null : sendCode,
-              icon: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send),
-              label: Text(tr('Send code')),
+
+    final int active = step;
+    final List<(IconData, String)> steps = [
+      (Icons.phone_android, tr('Phone')),
+      (Icons.pin_outlined, tr('Code')),
+      (Icons.lock_reset, tr('Reset')),
+    ];
+    final String title = switch (active) {
+      2 => '${tr('We sent a code to')} ${phone.text.trim()}',
+      3 => tr('Set a new password'),
+      _ => tr('Enter your phone number'),
+    };
+    final String subtitle = switch (active) {
+      2 => tr('Type the 6-digit code from the message.'),
+      3 => tr('Choose a new password that is at least 6 characters long.'),
+      _ => tr('We will text you a 6-digit code to verify it is you.'),
+    };
+
+    // Reusable gradient primary button (same look as the Sign In button).
+    Widget primary(VoidCallback onTap, String label, IconData icon) {
+      return SizedBox(
+        height: 54,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            gradient:
+                LinearGradient(colors: [Color(0xFF2456C8), Color(0xFF3B82F6)]),
+          ),
+          child: FilledButton(
+            onPressed: busy ? null : onTap,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              textStyle:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-          ],
-        );
-      case 2:
-        icon = Icons.pin_outlined;
-        title = '${tr('We sent a code to')} ${phone.text.trim()}';
-        body = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            field(codeInput, tr('Verification code'), Icons.password,
-                code_: true,
-                keyboard: TextInputType.number,
-                formatters: [FilteringTextInputFormatter.digitsOnly]),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: verifyCode,
-              child: Text(tr('Verify code')),
-            ),
-          ],
-        );
-      case 3:
-        icon = Icons.lock_reset;
-        title = tr('Reset password');
-        body = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            field(npass, tr('New Password'), Icons.lock_outline,
-                obscure: !show, keyboard: TextInputType.visiblePassword),
-            const SizedBox(height: 14),
-            field(cpass, tr('Confirm password'), Icons.lock_outline,
-                obscure: !show, keyboard: TextInputType.visiblePassword),
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                icon: Icon(show ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => show = !show),
-              ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: busy ? null : resetPassword,
-              icon: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.check),
-              label: Text(tr('Reset password')),
-            ),
-          ],
-        );
+            child: busy
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Colors.white))
+                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                    Text(label),
+                  ]),
+          ),
+        ),
+      );
     }
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Forgot Password'))),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Center(
-            child: Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: sch.primaryContainer,
-                borderRadius: BorderRadius.circular(24),
+
+    // Step body with smooth fade/slide when moving between steps.
+    Widget stepBody() {
+      final int k = active;
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0.04, 0), end: Offset.zero)
+                .animate(anim),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(
+          key: ValueKey<int>(k),
+          child: Column(
+            key: ValueKey<int>(k),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (k == 1)
+                field(phone, tr('Phone'), Icons.phone_android,
+                    node: fPhone,
+                    autofocus: true,
+                    action: TextInputAction.done,
+                    onSubmit: (_) => sendCode(),
+                    keyboard: TextInputType.phone,
+                    formatters: [FilteringTextInputFormatter.digitsOnly])
+              else if (k == 2)
+                field(codeInput, tr('Verification code'), Icons.pin_outlined,
+                    node: fCode,
+                    autofocus: true,
+                    action: TextInputAction.done,
+                    onSubmit: (_) => verifyCode(),
+                    code_: true,
+                    keyboard: TextInputType.number,
+                    formatters: [FilteringTextInputFormatter.digitsOnly])
+              else ...[
+                field(npass, tr('New Password'), Icons.lock_outline,
+                    node: fNpass,
+                    autofocus: true,
+                    action: TextInputAction.next,
+                    onSubmit: (_) => fCpass.requestFocus(),
+                    obscure: !show,
+                    keyboard: TextInputType.visiblePassword),
+                const SizedBox(height: 14),
+                field(cpass, tr('Confirm password'), Icons.lock_outline,
+                    node: fCpass,
+                    action: TextInputAction.done,
+                    onSubmit: (_) => resetPassword(),
+                    obscure: !show,
+                    keyboard: TextInputType.visiblePassword,
+                    suffix: IconButton(
+                      icon: Icon(show
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      onPressed: () => setState(() => show = !show),
+                    )),
+              ],
+              const SizedBox(height: 20),
+              if (k == 1)
+                primary(sendCode, tr('Send code'), Icons.send_outlined)
+              else if (k == 2) ...[
+                primary(
+                    verifyCode, tr('Verify code'), Icons.check_circle_outline),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      code = '';
+                      codeInput.clear();
+                      sendCode();
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(tr('Resend code')),
+                  ),
+                ),
+              ] else
+                primary(resetPassword, tr('Reset password'), Icons.check),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Step indicator (3 dots joined by a progress line).
+    Widget indicator() {
+      return Row(children: [
+        for (int i = 1; i <= 3; i++) ...[
+          if (i > 1)
+            Expanded(
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: i <= active ? sch.primary : sch.outlineVariant,
               ),
-              child: Icon(icon, size: 46, color: sch.onPrimaryContainer),
+            ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: i < active
+                  ? sch.primary
+                  : i == active
+                      ? sch.primaryContainer
+                      : sch.surfaceContainerHighest,
+              border:
+                  i == active ? Border.all(color: sch.primary, width: 2) : null,
+            ),
+            child: i < active
+                ? Icon(Icons.check, size: 18, color: sch.onPrimary)
+                : Center(
+                    child: Icon(steps[i - 1].$1,
+                        size: 14,
+                        color: i == active
+                            ? sch.onPrimaryContainer
+                            : sch.onSurfaceVariant)),
+          ),
+        ],
+      ]);
+    }
+
+    return AuthBackground(
+      child: FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              tooltip: tr('Back'),
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (active > 1) {
+                  setState(() => step = active - 1);
+                } else {
+                  Navigator.pop(c);
+                }
+              },
+            ),
+            title: Text(tr('Forgot Password'),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // White icon chip floating on the blue gradient, the way
+                      // the logo sits on the Sign In hero pane.
+                      Center(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          transitionBuilder: (child, anim) =>
+                              ScaleTransition(scale: anim, child: child),
+                          child: Container(
+                            key: ValueKey<int>(active),
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(color: sch.outlineVariant),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 22,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Icon(steps[active - 1].$1,
+                                size: 44, color: const Color(0xFF2456C8)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // White card keeps all the text and fields readable on the
+                      // gradient background.
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: sch.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: sch.outlineVariant),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.16),
+                              blurRadius: 26,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(title,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    fontSize: 20, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 8),
+                            Text(subtitle,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontSize: 13.5,
+                                    height: 1.4,
+                                    color: sch.onSurfaceVariant)),
+                            const SizedBox(height: 22),
+                            indicator(),
+                            const SizedBox(height: 22),
+                            stepBody(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
+/// Clean white background for the auth screens (Sign up, Forgot password)
+/// with soft light-grey circular accents. The form content sits on a white
+/// card with a border + shadow so it stays readable and clearly separated.
+class AuthBackground extends StatelessWidget {
+  const AuthBackground({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final ring =
+        dark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFDDE3F0);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: dark
+              ? [const Color(0xFF11151C), const Color(0xFF171C26)]
+              : [Colors.white, const Color(0xFFF2F5FC)],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Soft decorative circles so the page still looks designed.
+          Positioned(
+            top: -110,
+            right: -110,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: ring.withValues(alpha: 0.7), width: 30),
+              ),
+            ),
           ),
-          body,
+          Positioned(
+            bottom: -70,
+            left: -70,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: ring.withValues(alpha: 0.6), width: 26),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 110,
+            left: 60,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: ring.withValues(alpha: 0.8), width: 14),
+              ),
+            ),
+          ),
+          child,
         ],
       ),
     );
@@ -514,7 +834,11 @@ class LoginPage extends StatefulWidget {
   final LoginPresenter p;
   final void Function(User) success;
   final VoidCallback signup;
-  const LoginPage({super.key, required this.p, required this.success, required this.signup});
+  const LoginPage(
+      {super.key,
+      required this.p,
+      required this.success,
+      required this.signup});
   @override
   State<LoginPage> createState() => _Login();
 }
@@ -546,31 +870,33 @@ class _Login extends State<LoginPage> {
 
   // Outlined, focus-aware field style (replaces the old flat grey boxes:
   // now there is a visible border, a subtle fill and a colored focus ring).
-  Widget field(BuildContext c, TextEditingController ctrl, String t,
-      IconData icon,
-      {bool obscure = false, Widget? suffix}) =>
+  Widget field(
+          BuildContext c, TextEditingController ctrl, String t, IconData icon,
+          {bool obscure = false, Widget? suffix}) =>
       TextField(
         controller: ctrl,
         obscureText: obscure,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
-          labelText: t,
-          prefixIcon: Icon(icon),
+          hintText: t,
+          hintStyle: TextStyle(
+              color: Theme.of(c).colorScheme.onSurfaceVariant, fontSize: 16),
+          prefixIcon: Icon(icon, size: 22),
           suffixIcon: suffix,
           filled: true,
           fillColor: Theme.of(c).colorScheme.surfaceContainerLowest,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               borderSide:
                   BorderSide(color: Theme.of(c).colorScheme.outlineVariant)),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               borderSide:
                   BorderSide(color: Theme.of(c).colorScheme.outlineVariant)),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
               borderSide: BorderSide(
                   color: Theme.of(c).colorScheme.primary, width: 1.6)),
         ),
@@ -616,8 +942,7 @@ class _Login extends State<LoginPage> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.10),
-                    width: 26),
+                    color: Colors.white.withValues(alpha: 0.10), width: 26),
               ),
             )),
         Positioned(
@@ -629,8 +954,7 @@ class _Login extends State<LoginPage> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 22),
+                    color: Colors.white.withValues(alpha: 0.08), width: 22),
               ),
             )),
         SafeArea(
@@ -639,225 +963,193 @@ class _Login extends State<LoginPage> {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-            // Logo centered on top of the brand pane.
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14)),
-              child: Image.asset('assets/images/image.png',
-                  height: 40, fit: BoxFit.contain),
-            ),
-            const Spacer(),
-            Text(tr('Welcome to Global Online'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2)),
-            const SizedBox(height: 10),
-            Text(tr('Sign in to continue shopping'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 15)),
-            const SizedBox(height: 30),
-            // Feature rows centered as a group (fixed width so the text
-            // lines up while the whole block sits in the middle).
-            SizedBox(
-                width: 290,
-                child: feature(Icons.local_offer_outlined,
-                    tr('Best prices & daily deals'))),
-            const SizedBox(height: 14),
-            SizedBox(
-                width: 290,
-                child: feature(Icons.local_shipping_outlined,
-                    tr('Fast delivery to your door'))),
-            const SizedBox(height: 14),
-            SizedBox(
-                width: 290,
-                child: feature(Icons.verified_user_outlined,
-                    tr('Secure payments & easy returns'))),
-            ]),
+                  // Logo centered on top of the brand pane.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14)),
+                    child: Image.asset('assets/images/image.png',
+                        height: 40, fit: BoxFit.contain),
+                  ),
+                  const Spacer(),
+                  Text(tr('Welcome to Global Online'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2)),
+                  const SizedBox(height: 10),
+                  Text(tr('Sign in to continue shopping'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 15)),
+                  const SizedBox(height: 30),
+                  // Feature rows centered as a group (fixed width so the text
+                  // lines up while the whole block sits in the middle).
+                  SizedBox(
+                      width: 290,
+                      child: feature(Icons.local_offer_outlined,
+                          tr('Best prices & daily deals'))),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                      width: 290,
+                      child: feature(Icons.local_shipping_outlined,
+                          tr('Fast delivery to your door'))),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                      width: 290,
+                      child: feature(Icons.verified_user_outlined,
+                          tr('Secure payments & easy returns'))),
+                ]),
           ),
         ),
       ]),
     );
   }
 
-  /// The login form, centered — shared by the wide and narrow layouts.
+  /// The login form fields — shared by the wide and narrow layouts.
+  Widget _formFields(
+      BuildContext c, String Function(String) tr, ColorScheme sch) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(tr('Welcome to Global Online'),
+          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      Text(tr('Sign in to continue shopping'),
+          style: TextStyle(fontSize: 14, color: sch.onSurfaceVariant)),
+      const SizedBox(height: 28),
+      // One field for everyone: customers sign in with their
+      // username, the admin signs in with the admin phone number.
+      field(c, u, tr('Phone number or Username'), Icons.phone_android),
+      const SizedBox(height: 16),
+      field(c, p, tr('Password'), Icons.lock_outline,
+          obscure: !show,
+          suffix: IconButton(
+            icon: Icon(show
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined),
+            onPressed: () => setState(() => show = !show),
+          )),
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          onPressed: () => Navigator.push(
+              c, MaterialPageRoute(builder: (_) => const ForgotPasswordPage())),
+          child: Text(tr('Forgot Password?')),
+        ),
+      ),
+      const SizedBox(height: 10),
+      // Gradient primary button — stands out more than flat blue.
+      SizedBox(
+        height: 54,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: const LinearGradient(
+                colors: [Color(0xFF2456C8), Color(0xFF3B82F6)]),
+          ),
+          child: FilledButton(
+            onPressed: busy ? null : go,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28)),
+              textStyle:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            child: busy
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Colors.white))
+                : Text(tr('Sign In')),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextButton(
+        onPressed: widget.signup,
+        child: Text.rich(TextSpan(
+          text: '${tr('New to Global Online?')} ',
+          children: [
+            TextSpan(
+              text: tr('Create Account'),
+              style: TextStyle(fontWeight: FontWeight.w700, color: sch.primary),
+            ),
+          ],
+        )),
+      ),
+      // Social login (Google/Telegram) is for regular users only.
+      // The admin signs in with phone + password alone.
+      if (!ApiService.isAdminDevice) ...[
+        const SizedBox(height: 20),
+        Row(children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(tr('Or continue with'),
+                style: TextStyle(color: sch.onSurfaceVariant)),
+          ),
+          const Expanded(child: Divider()),
+        ]),
+        const SizedBox(height: 18),
+        SocialButtons(
+            onLogin: widget.success, googleLogin: widget.p.googleLogin),
+      ],
+      // The admin account is desktop-only: on phones there is no
+      // admin login hint at all. Hidden entirely in the user-only
+      // frontend.
+      if (ApiService.isAdminDevice) ...[
+        const SizedBox(height: 18),
+        InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            u.text = ApiService.adminPhone;
+            p.text = ApiService.adminPassword;
+            setState(() {});
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: sch.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: sch.outlineVariant),
+            ),
+            child: Row(children: [
+              Icon(Icons.admin_panel_settings_outlined,
+                  size: 16, color: sch.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr('Admin login (computer only): 066778213 / admin123'),
+                  style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant),
+                ),
+              ),
+              Icon(Icons.keyboard_arrow_right,
+                  size: 14, color: sch.onSurfaceVariant),
+            ]),
+          ),
+        ),
+      ],
+    ]);
+  }
+
+  /// The login form, centered — the wide layout keeps the brand pane beside
+  /// the fields; the phone layout wraps [_formFields] in a floating card.
   Widget _formPane(
-      BuildContext c, String Function(String) tr, ColorScheme sch, bool wide) {
+      BuildContext c, String Function(String) tr, ColorScheme sch) {
     return Center(
       child: SingleChildScrollView(
-        padding:
-            EdgeInsets.symmetric(horizontal: wide ? 48 : 24, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (!wide) ...[
-                  // Small logo card on phones — BoxFit.contain so the wide
-                  // banner is never cropped.
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: sch.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: sch.outlineVariant),
-                        boxShadow: [
-                          BoxShadow(
-                            color: sch.shadow.withValues(alpha: 0.08),
-                            blurRadius: 18,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Image.asset('assets/images/image.png',
-                          height: 72, fit: BoxFit.contain),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-                Text(tr('Welcome to Global Online'),
-                    style: const TextStyle(
-                        fontSize: 26, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                Text(tr('Sign in to continue shopping'),
-                    style: TextStyle(
-                        fontSize: 14, color: sch.onSurfaceVariant)),
-                const SizedBox(height: 28),
-                // One field for everyone: customers sign in with their
-                // username, the admin signs in with the admin phone number.
-                field(c, u, tr('Phone number or Username'),
-                    Icons.phone_android),
-                const SizedBox(height: 16),
-                field(c, p, tr('Password'), Icons.lock_outline,
-                    obscure: !show,
-                    suffix: IconButton(
-                      icon: Icon(show
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined),
-                      onPressed: () => setState(() => show = !show),
-                    )),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact),
-                    onPressed: () => Navigator.push(
-                        c,
-                        MaterialPageRoute(
-                            builder: (_) => const ForgotPasswordPage())),
-                    child: Text(tr('Forgot Password?')),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Gradient primary button — stands out more than flat blue.
-                SizedBox(
-                  height: 54,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(colors: [
-                        Color(0xFF2456C8),
-                        Color(0xFF3B82F6)
-                      ]),
-                    ),
-                    child: FilledButton(
-                      onPressed: busy ? null : go,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        textStyle: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                      child: busy
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2.5, color: Colors.white))
-                          : Text(tr('Sign In')),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: widget.signup,
-                  child: Text.rich(TextSpan(
-                    text: '${tr('New to Global Online?')} ',
-                    children: [
-                      TextSpan(
-                        text: tr('Create Account'),
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: sch.primary),
-                      ),
-                    ],
-                  )),
-                ),
-                const SizedBox(height: 20),
-                Row(children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(tr('Or continue with'),
-                        style: TextStyle(color: sch.onSurfaceVariant)),
-                  ),
-                  const Expanded(child: Divider()),
-                ]),
-                const SizedBox(height: 18),
-                SocialButtons(
-                    onLogin: widget.success,
-                    googleLogin: widget.p.googleLogin),
-                // The admin account is desktop-only: on phones there is no
-                // admin login hint at all. Hidden entirely in the user-only
-                // frontend.
-                if (ApiService.isAdminDevice) ...[
-                  const SizedBox(height: 18),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      u.text = ApiService.adminPhone;
-                      p.text = ApiService.adminPassword;
-                      setState(() {});
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: sch.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: sch.outlineVariant),
-                      ),
-                      child: Row(children: [
-                        Icon(Icons.admin_panel_settings_outlined,
-                            size: 16, color: sch.onSurfaceVariant),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            tr(
-                                'Admin login (computer only): 066778213 / admin123'),
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: sch.onSurfaceVariant),
-                          ),
-                        ),
-                        Icon(Icons.keyboard_arrow_right,
-                            size: 14, color: sch.onSurfaceVariant),
-                      ]),
-                    ),
-                  ),
-                ],
-              ]),
+          child: _formFields(c, tr, sch),
         ),
       ),
     );
@@ -894,14 +1186,85 @@ class _Login extends State<LoginPage> {
               clipBehavior: Clip.antiAlias,
               child: Row(children: [
                 Expanded(child: _heroPane(c, tr)),
-                Expanded(child: _formPane(c, tr, sch, true)),
+                Expanded(child: _formPane(c, tr, sch)),
               ]),
             ),
           );
         }
-        // Phone: single centered column with the logo card on top.
-        return SafeArea(
-          child: _formPane(c, tr, sch, false),
+        // Phone: the form floats on a soft blue-tinted gradient, inside a
+        // white rounded card, with a blue gradient strip on the left edge.
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFEAF1FC), Color(0xFFF7FAFF)],
+            ),
+          ),
+          child: Stack(children: [
+            // Decorative gradient accent strip along the left edge.
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: 0,
+              child: Container(
+                width: 10,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF16337F),
+                      Color(0xFF2456C8),
+                      Color(0xFF3B82F6)
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+child: Container(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      padding: const EdgeInsets.fromLTRB(22, 30, 22, 26),
+                      decoration: BoxDecoration(
+                        color: sch.surface,
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                            color: sch.shadow.withValues(alpha: 0.10),
+                            blurRadius: 30,
+                            offset: const Offset(0, 14),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: sch.surfaceContainerLowest,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: sch.outlineVariant),
+                              ),
+                              child: Image.asset('assets/images/image.png',
+                                  height: 48, fit: BoxFit.contain),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          _formFields(c, tr, sch),
+                        ],
+                      ),
+                    ),
+                ),
+              ),
+            ),
+          ]),
         );
       }),
     );
@@ -923,6 +1286,12 @@ class _Signup extends State<SignupPage> {
   final e = TextEditingController();
   final p = TextEditingController();
   final cp = TextEditingController();
+  final nf = FocusNode();
+  final nl = FocusNode();
+  final ne = FocusNode();
+  final nem = FocusNode();
+  final npw = FocusNode();
+  final ncp = FocusNode();
   bool busy = false;
   bool show = false;
 
@@ -936,8 +1305,13 @@ class _Signup extends State<SignupPage> {
     setState(() => busy = true);
     try {
       final x = await widget.p.signup(
-          f: f.text, l: l.text, u: uname, p: p.text, c: cp.text,
-          e: em.text, ph: e.text);
+          f: f.text,
+          l: l.text,
+          u: uname,
+          p: p.text,
+          c: cp.text,
+          e: em.text,
+          ph: e.text);
       // Remember the account on this device so it can actually sign in
       // later (the demo API cannot authenticate newly created users).
       await AppSettings.saveLocalAccount(
@@ -968,19 +1342,42 @@ class _Signup extends State<SignupPage> {
   }
 
   Widget field(TextEditingController c, String t, IconData icon,
-          {bool s = false, Widget? trailing}) =>
-      TextField(
-          controller: c,
-          obscureText: s,
-          style: const TextStyle(fontSize: 16),
-          decoration: InputDecoration(
-              labelText: t,
-              prefixIcon: Icon(icon),
-              filled: true,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none),
-              suffixIcon: trailing));
+      {bool s = false,
+      Widget? trailing,
+      TextInputType? keyboard,
+      FocusNode? node,
+      bool autofocus = false,
+      TextInputAction? action,
+      ValueChanged<String>? onSubmit}) {
+    final sch = Theme.of(context).colorScheme;
+    final base = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: sch.outlineVariant));
+    return TextField(
+      controller: c,
+      focusNode: node,
+      autofocus: autofocus,
+      textInputAction: action,
+      onSubmitted: onSubmit,
+      obscureText: s,
+      keyboardType: keyboard,
+      style: const TextStyle(fontSize: 16),
+      decoration: InputDecoration(
+        labelText: t,
+        prefixIcon: Icon(icon),
+        suffixIcon: trailing,
+        filled: true,
+        fillColor: sch.surfaceContainerLowest,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        border: base,
+        enabledBorder: base,
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: sch.primary, width: 1.6)),
+      ),
+    );
+  }
 
   Widget eye() => IconButton(
         icon: Icon(show ? Icons.visibility_off : Icons.visibility),
@@ -988,105 +1385,230 @@ class _Signup extends State<SignupPage> {
       );
 
   @override
+  void dispose() {
+    f.dispose();
+    l.dispose();
+    em.dispose();
+    e.dispose();
+    p.dispose();
+    cp.dispose();
+    nf.dispose();
+    nl.dispose();
+    ne.dispose();
+    nem.dispose();
+    npw.dispose();
+    ncp.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Sign Up')),
-        leading: IconButton(
-          tooltip: tr('Back'),
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          children: [
-            const SizedBox(height: 8),
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset('assets/images/image.png',
-                    height: 72, fit: BoxFit.contain),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(tr('Create your account'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text(tr('Join Global Online and start shopping'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
-            const SizedBox(height: 24),
-            field(f, tr('First name'), Icons.person_outline),
-            const SizedBox(height: 12),
-            field(l, tr('Last name'), Icons.person_outline),
-            const SizedBox(height: 12),
-            field(e, tr('Phone'), Icons.phone_android),
-            const SizedBox(height: 12),
-            field(em, tr('Email'), Icons.mail_outline),
-            const SizedBox(height: 12),
-            field(p, tr('Password'), Icons.lock_outline,
-                s: !show, trailing: eye()),
-            const SizedBox(height: 12),
-            field(cp, tr('Confirm password'), Icons.lock_outline,
-                s: !show, trailing: eye()),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: busy ? null : go,
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                child: busy
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white))
-                    : Text(tr('Create Account')),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(tr('Or continue with'),
-                      style: TextStyle(color: sch.onSurfaceVariant)),
-                ),
-                const Expanded(child: Divider()),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SocialButtons(
-                onLogin: widget.success,
-                googleLogin: widget.p.repo.googleLogin),
-            const SizedBox(height: 8),
-            TextButton(
+    return AuthBackground(
+      child: FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              tooltip: tr('Back'),
+              icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.of(context).maybePop(),
-              child: Text.rich(TextSpan(
-                text: '${tr('Already have an account?')} ',
-                children: [
-                  TextSpan(
-                    text: tr('Sign In'),
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: sch.primary),
-                  ),
-                ],
-              )),
             ),
-            const SizedBox(height: 12),
-          ],
+            title: Text(tr('Sign Up'),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // White logo chip floating on the gradient, like the logo
+                      // on the Sign In hero pane.
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: sch.outlineVariant),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 22,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset('assets/images/image.png',
+                              height: 56, fit: BoxFit.contain),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // White card keeps everything readable on the gradient.
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: sch.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: sch.outlineVariant),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.16),
+                              blurRadius: 26,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(tr('Create your account'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    fontSize: 24, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 6),
+                            Text(tr('Join Global Online and start shopping'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontSize: 14, color: sch.onSurfaceVariant)),
+                            const SizedBox(height: 26),
+                            Row(children: [
+                              Expanded(
+                                child: field(
+                                    f, tr('First name'), Icons.person_outline,
+                                    node: nf,
+                                    autofocus: true,
+                                    action: TextInputAction.next,
+                                    onSubmit: (_) => nl.requestFocus()),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: field(
+                                    l, tr('Last name'), Icons.person_outline,
+                                    node: nl,
+                                    action: TextInputAction.next,
+                                    onSubmit: (_) => ne.requestFocus()),
+                              ),
+                            ]),
+                            const SizedBox(height: 14),
+                            field(e, tr('Phone'), Icons.phone_android,
+                                node: ne,
+                                action: TextInputAction.next,
+                                onSubmit: (_) => nem.requestFocus(),
+                                keyboard: TextInputType.phone),
+                            const SizedBox(height: 14),
+                            field(em, tr('Email'), Icons.mail_outline,
+                                node: nem,
+                                action: TextInputAction.next,
+                                onSubmit: (_) => npw.requestFocus(),
+                                keyboard: TextInputType.emailAddress),
+                            const SizedBox(height: 14),
+                            field(p, tr('Password'), Icons.lock_outline,
+                                node: npw,
+                                action: TextInputAction.next,
+                                onSubmit: (_) => ncp.requestFocus(),
+                                s: !show,
+                                trailing: eye()),
+                            const SizedBox(height: 14),
+                            field(
+                                cp, tr('Confirm password'), Icons.lock_outline,
+                                node: ncp,
+                                action: TextInputAction.done,
+                                onSubmit: (_) => go(),
+                                s: !show,
+                                trailing: eye()),
+                            const SizedBox(height: 24),
+                            // Gradient primary button — same as Sign In.
+                            SizedBox(
+                              height: 54,
+                              child: DecoratedBox(
+                                decoration: const BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(16)),
+                                  gradient: LinearGradient(colors: [
+                                    Color(0xFF2456C8),
+                                    Color(0xFF3B82F6)
+                                  ]),
+                                ),
+                                child: FilledButton(
+                                  onPressed: busy ? null : go,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(16)),
+                                    textStyle: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                  child: busy
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: Colors.white))
+                                      : Text(tr('Create Account')),
+                                ),
+                              ),
+                            ),
+                            // Social login (Google/Telegram) is for regular users
+                            // only. The admin creates/uses phone accounts alone.
+                            if (!ApiService.isAdminDevice) ...[
+                              const SizedBox(height: 22),
+                              Row(children: [
+                                const Expanded(child: Divider()),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  child: Text(tr('Or continue with'),
+                                      style: TextStyle(
+                                          color: sch.onSurfaceVariant)),
+                                ),
+                                const Expanded(child: Divider()),
+                              ]),
+                              const SizedBox(height: 20),
+                              SocialButtons(
+                                  onLogin: widget.success,
+                                  googleLogin: widget.p.repo.googleLogin),
+                            ],
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).maybePop(),
+                              child: Text.rich(TextSpan(
+                                text: '${tr('Already have an account?')} ',
+                                children: [
+                                  TextSpan(
+                                    text: tr('Sign In'),
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: sch.primary),
+                                  ),
+                                ],
+                              )),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1143,8 +1665,12 @@ class _Home extends State<HomePage> {
       });
 
   void detail(Product p) {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => ProductPage(p: p, cart: widget.cart, fav: widget.fav))).then((_) {
+    Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) =>
+                    ProductPage(p: p, cart: widget.cart, fav: widget.fav)))
+        .then((_) {
       if (mounted) setState(() {});
     });
   }
@@ -1152,7 +1678,8 @@ class _Home extends State<HomePage> {
   /// The signed-in user merged with their OWN locally saved profile edits
   /// (name / photo changed in Edit Profile) so the AppBar stays fresh.
   User get _user {
-    final saved = AppSettings.savedProfileFor(AppSettings.profileKeyOf(widget.user));
+    final saved =
+        AppSettings.savedProfileFor(AppSettings.profileKeyOf(widget.user));
     if (saved == null) return widget.user;
     return User(
         id: widget.user.id,
@@ -1197,56 +1724,121 @@ class _Home extends State<HomePage> {
     final tr = l10n.t;
     final sch = Theme.of(c).colorScheme;
     return Scaffold(
-        appBar: AppBar(
-          title: Semantics(
-            header: true,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset('assets/images/image.png',
-                  height: 32, fit: BoxFit.contain),
-            ),
+      appBar: AppBar(
+        title: Semantics(
+          header: true,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset('assets/images/image.png',
+                height: 32, fit: BoxFit.contain),
           ),
-          actions: [
-            // Chat Support — compact tonal circle for a cohesive app bar look.
-            IconButton.filledTonal(
-              tooltip: tr('Chat Support'),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SupportPage())),
+        ),
+        actions: [
+          // Chat Support — compact tonal circle for a cohesive app bar look.
+          IconButton.filledTonal(
+            tooltip: tr('Chat Support'),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SupportPage())),
+            iconSize: 20,
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.headset_mic_outlined),
+          ),
+          const SizedBox(width: 6),
+          // Cart — tonal circle with a red count badge.
+          Badge(
+            isLabelVisible: widget.cart.count > 0,
+            backgroundColor: sch.error,
+            textColor: sch.onError,
+            textStyle:
+                const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+            child: IconButton.filledTonal(
+              tooltip: tr('Cart'),
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => CartPage(
+                          cart: widget.cart,
+                          orders: widget.orders,
+                          owner: widget.user.username))).then((_) {
+                if (mounted) setState(() {});
+              }),
               iconSize: 20,
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.headset_mic_outlined),
+              icon: const Icon(Icons.shopping_cart_outlined),
             ),
-            const SizedBox(width: 6),
-            // Cart — tonal circle with a red count badge.
-            Badge(
-              isLabelVisible: widget.cart.count > 0,
-              backgroundColor: sch.error,
-              textColor: sch.onError,
-              textStyle:
-                  const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
-              child: IconButton.filledTonal(
-                tooltip: tr('Cart'),
-                onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders, owner: widget.user.username)))
-                    .then((_) {
-                  if (mounted) setState(() {});
-                }),
-                iconSize: 20,
-                visualDensity: VisualDensity.compact,
-                constraints:
-                    const BoxConstraints.tightFor(width: 40, height: 40),
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.shopping_cart_outlined),
+          ),
+          // Profile — avatar wrapped in a gradient ring.
+          Padding(
+            padding: const EdgeInsets.only(left: 8, right: 10),
+            child: InkWell(
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => ProfilePage(
+                          user: _user,
+                          ownerKey: AppSettings.profileKeyOf(widget.user),
+                          cart: widget.cart,
+                          fav: widget.fav,
+                          orders: widget.orders,
+                          products: widget.home.products(),
+                          logout: widget.logout,
+                          dark: widget.dark,
+                          setTheme: widget.setTheme,
+                          setLocale: widget.setLocale,
+                          admin: widget.user.isAdmin
+                              ? AdminRepository(widget.home.repo.api)
+                              : null))).then((_) {
+                if (mounted) setState(() {});
+              }),
+              customBorder: const CircleBorder(),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [sch.primary, sch.tertiary]),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(1.5),
+                  decoration:
+                      BoxDecoration(shape: BoxShape.circle, color: sch.surface),
+                  child: _profileAvatar(tr),
+                ),
               ),
             ),
-            // Profile — avatar wrapped in a gradient ring.
-            Padding(
-              padding: const EdgeInsets.only(left: 8, right: 10),
-              child: InkWell(
-                onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => ProfilePage(
+          ),
+          PopupMenuButton<String>(
+            tooltip: tr('More'),
+            color: sch.surfaceContainerLow,
+            elevation: 4,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            constraints: const BoxConstraints(minWidth: 190, maxWidth: 240),
+            onSelected: (v) {
+              if (v == 'fav') {
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) => FavoritePage(
+                            fav: widget.fav,
+                            cart: widget.cart,
+                            source: future)));
+              }
+              if (v == 'cat') {
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            CategoryPage(cart: widget.cart, fav: widget.fav)));
+              }
+              if (v == 'profile') {
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) => ProfilePage(
                             user: _user,
                             ownerKey: AppSettings.profileKeyOf(widget.user),
                             cart: widget.cart,
@@ -1254,244 +1846,212 @@ class _Home extends State<HomePage> {
                             orders: widget.orders,
                             products: widget.home.products(),
                             logout: widget.logout,
+                            dark: widget.dark,
+                            setTheme: widget.setTheme,
+                            setLocale: widget.setLocale,
                             admin: widget.user.isAdmin
                                 ? AdminRepository(widget.home.repo.api)
-                                : null)))
-                    .then((_) {
+                                : null)));
+              }
+              if (v == 'orders') {
+                Navigator.push(
+                        c,
+                        MaterialPageRoute(
+                            builder: (_) => OrderPage(
+                                orders: widget.orders,
+                                owner: widget.user.username)))
+                    .then((_) => mounted ? setState(() {}) : null);
+              }
+              if (v == 'admin') {
+                // Admin panel is desktop-only (never opens on phones).
+                if (!ApiService.isAdminDevice) return;
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) => AdminPanelPage(
+                            admin: widget.user,
+                            repo: AdminRepository(widget.home.repo.api),
+                            orders: widget.orders,
+                            dark: widget.dark,
+                            setTheme: widget.setTheme,
+                            setLocale: widget.setLocale,
+                            onLogout: widget.logout))).then((_) {
                   if (mounted) setState(() {});
-                }),
-                customBorder: const CircleBorder(),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                        colors: [sch.primary, sch.tertiary]),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(1.5),
-                    decoration: BoxDecoration(
-                        shape: BoxShape.circle, color: sch.surface),
-                    child: _profileAvatar(tr),
-                  ),
-                ),
-              ),
-            ),
-            PopupMenuButton<String>(
-              tooltip: tr('More'),
-              color: sch.surfaceContainerLow,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              constraints: const BoxConstraints(minWidth: 190, maxWidth: 240),
-              onSelected: (v) {
-                if (v == 'fav') {
-                  Navigator.push(c,
-                      MaterialPageRoute(builder: (_) => FavoritePage(fav: widget.fav, cart: widget.cart, source: future)));
-                }
-                if (v == 'cat') {
-                  Navigator.push(c,
-                      MaterialPageRoute(builder: (_) => CategoryPage(cart: widget.cart, fav: widget.fav)));
-                }
-                if (v == 'profile') {
-                  Navigator.push(c, MaterialPageRoute(builder: (_) => ProfilePage(
-                      user: _user,
-                      ownerKey: AppSettings.profileKeyOf(widget.user),
-                      cart: widget.cart,
-                      fav: widget.fav,
-                      orders: widget.orders,
-                      products: widget.home.products(),
-                      logout: widget.logout,
-                      admin: widget.user.isAdmin
-                          ? AdminRepository(widget.home.repo.api)
-                          : null)));
-                }
-                if (v == 'orders') {
-                  Navigator.push(
-                          c,
-                          MaterialPageRoute(
-                              builder: (_) => OrderPage(
-                                  orders: widget.orders,
-                                  owner: widget.user.username)))
-                      .then((_) => mounted ? setState(() {}) : null);
-                }
-                if (v == 'admin') {
-                  // Admin panel is desktop-only (never opens on phones).
-                  if (!ApiService.isAdminDevice) return;
-                  Navigator.push(c, MaterialPageRoute(builder: (_) => AdminPanelPage(
-                      admin: widget.user,
-                      repo: AdminRepository(widget.home.repo.api),
-                      orders: widget.orders,
-                      onLogout: widget.logout))).then((_) {
-                    if (mounted) setState(() {});
-                  });
-                }
-                if (v == 'settings') {
-                  Navigator.push(c,
-                      MaterialPageRoute(builder: (_) => SettingsPage(dark: widget.dark, setTheme: widget.setTheme, setLocale: widget.setLocale)));
-                }
-                if (v == 'support') {
-                  Navigator.push(c,
-                      MaterialPageRoute(builder: (_) => const SupportPage()));
-                }
-                if (v == 'feedback') {
-                  Navigator.push(c, MaterialPageRoute(
-                      builder: (_) => FeedbackPage(user: _user)));
-                }
-                if (v == 'logout') widget.logout();
-              },
-              itemBuilder: (mc) {
-                final tr = AppLocalizations.of(mc).t;
-                final mch = Theme.of(mc).colorScheme;
-                PopupMenuItem<String> item(
-                        String value, IconData icon, String label) =>
-                    PopupMenuItem<String>(
-                      height: 44,
-                      value: value,
-                      child: Row(children: [
-                        Icon(icon, size: 20, color: mch.onSurfaceVariant),
-                        const SizedBox(width: 12),
-                        Text(label, style: const TextStyle(fontSize: 14)),
-                      ]),
-                    );
-                return [
-                  item('fav', Icons.favorite_border, tr('Favorites')),
-                  item('cat', Icons.category_outlined, tr('Categories')),
-                  item('orders', Icons.receipt_long_outlined,
-                      tr('Order History')),
-                  item('support', Icons.chat_bubble_outline, tr('Chat Support')),
-                  item('feedback', Icons.rate_review_outlined, tr('Feedback')),
-                  item('profile', Icons.person_outline, tr('Profile')),
-                  // Admin panel entry only exists on the computer, never on
-                  // phones, and never in the user-only frontend.
-                  if (widget.user.isAdmin && ApiService.isAdminDevice)
-                    item('admin', Icons.admin_panel_settings_outlined,
-                        tr('Admin Panel')),
-                  item('settings', Icons.settings_outlined, tr('Settings')),
-                  const PopupMenuDivider(),
+                });
+              }
+              if (v == 'settings') {
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) => SettingsPage(
+                            dark: widget.dark,
+                            setTheme: widget.setTheme,
+                            setLocale: widget.setLocale)));
+              }
+              if (v == 'support') {
+                Navigator.push(
+                    c, MaterialPageRoute(builder: (_) => const SupportPage()));
+              }
+              if (v == 'feedback') {
+                Navigator.push(
+                    c,
+                    MaterialPageRoute(
+                        builder: (_) => FeedbackPage(user: _user)));
+              }
+              if (v == 'logout') widget.logout();
+            },
+            itemBuilder: (mc) {
+              final tr = AppLocalizations.of(mc).t;
+              final mch = Theme.of(mc).colorScheme;
+              PopupMenuItem<String> item(
+                      String value, IconData icon, String label) =>
                   PopupMenuItem<String>(
                     height: 44,
-                    value: 'logout',
+                    value: value,
                     child: Row(children: [
-                      Icon(Icons.logout, size: 20, color: mch.error),
+                      Icon(icon, size: 20, color: mch.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(tr('Logout'),
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: mch.error)),
+                      Text(label, style: const TextStyle(fontSize: 14)),
                     ]),
-                  ),
-                ];
-              },
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: q,
-                      onChanged: (_) => search(),
-                      onSubmitted: (_) => search(),
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText: tr('Search products or categories'),
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: q.text.isEmpty
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: clearSearch),
-                        filled: true,
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none),
-                      ),
+                  );
+              return [
+                item('fav', Icons.favorite_border, tr('Favorites')),
+                item('cat', Icons.category_outlined, tr('Categories')),
+                item(
+                    'orders', Icons.receipt_long_outlined, tr('Order History')),
+                item('support', Icons.chat_bubble_outline, tr('Chat Support')),
+                item('feedback', Icons.rate_review_outlined, tr('Feedback')),
+                item('profile', Icons.person_outline, tr('Profile')),
+                // Admin panel entry only exists on the computer, never on
+                // phones, and never in the user-only frontend.
+                if (widget.user.isAdmin && ApiService.isAdminDevice)
+                  item('admin', Icons.admin_panel_settings_outlined,
+                      tr('Admin Panel')),
+                item('settings', Icons.settings_outlined, tr('Settings')),
+                const PopupMenuDivider(),
+                PopupMenuItem<String>(
+                  height: 44,
+                  value: 'logout',
+                  child: Row(children: [
+                    Icon(Icons.logout, size: 20, color: mch.error),
+                    const SizedBox(width: 12),
+                    Text(tr('Logout'),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: mch.error)),
+                  ]),
+                ),
+              ];
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: q,
+                    onChanged: (_) => search(),
+                    onSubmitted: (_) => search(),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: tr('Search products or categories'),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: q.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: clearSearch),
+                      filled: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 6, 0),
-              child: Row(
-                children: [
-                  Flexible(child: _sortButton(c, tr)),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: tr('1 Column'),
-                    isSelected: cols == 1,
-                    onPressed: () => setState(() => cols = 1),
-                    icon: const Icon(Icons.view_agenda_outlined),
-                  ),
-                  IconButton(
-                    tooltip: tr('2 Columns'),
-                    isSelected: cols == 2,
-                    onPressed: () => setState(() => cols = 2),
-                    icon: const Icon(Icons.grid_on),
-                  ),
-                ],
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 6, 0),
+            child: Row(
+              children: [
+                Flexible(child: _sortButton(c, tr)),
+                const Spacer(),
+                IconButton(
+                  tooltip: tr('1 Column'),
+                  isSelected: cols == 1,
+                  onPressed: () => setState(() => cols = 1),
+                  icon: const Icon(Icons.view_agenda_outlined),
+                ),
+                IconButton(
+                  tooltip: tr('2 Columns'),
+                  isSelected: cols == 2,
+                  onPressed: () => setState(() => cols = 2),
+                  icon: const Icon(Icons.grid_on),
+                ),
+              ],
             ),
-            const Divider(height: 16, thickness: 1),
-            Expanded(
-              child: FutureBuilder<List<Product>>(
-                future: future,
-                builder: (_, s) {
-                  if (s.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (s.hasError) {
-                    return Center(
-                      child: FilledButton(
-                        onPressed: () {
-                          setState(() {
-                            future = widget.home.products();
-                          });
-                        },
-                        child: Text(tr('Retry')),
-                      ),
-                    );
-                  }
-                  final list = s.data ?? [];
-                  if (list.isEmpty) {
-                    return Center(
-                      child: Text(
-                        q.text.trim().isEmpty
-                            ? tr('No products')
-                            : l10n.noProductsFor(q.text.trim()),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    );
-                  }
-                  final trimmed = q.text.trim();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (trimmed.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-                          child: Text(
-                            list.length == 1
-                                ? l10n.oneResult(trimmed)
-                                : l10n.nResults(list.length, trimmed),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      Expanded(child: _grid(list)),
-                    ],
+          ),
+          const Divider(height: 16, thickness: 1),
+          Expanded(
+            child: FutureBuilder<List<Product>>(
+              future: future,
+              builder: (_, s) {
+                if (s.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (s.hasError) {
+                  return Center(
+                    child: FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          future = widget.home.products();
+                        });
+                      },
+                      child: Text(tr('Retry')),
+                    ),
                   );
-                },
-              ),
+                }
+                final list = s.data ?? [];
+                if (list.isEmpty) {
+                  return Center(
+                    child: Text(
+                      q.text.trim().isEmpty
+                          ? tr('No products')
+                          : l10n.noProductsFor(q.text.trim()),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  );
+                }
+                final trimmed = q.text.trim();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (trimmed.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+                        child: Text(
+                          list.length == 1
+                              ? l10n.oneResult(trimmed)
+                              : l10n.nResults(list.length, trimmed),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    Expanded(child: _grid(list)),
+                  ],
+                );
+              },
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _sortButton(BuildContext c, String Function(String) tr) {
@@ -1506,9 +2066,7 @@ class _Home extends State<HomePage> {
           child: Row(
             children: [
               Icon(
-                sort == v
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
+                sort == v ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 18,
                 color: sort == v ? sch.primary : null,
               ),
@@ -1554,55 +2112,59 @@ class _Home extends State<HomePage> {
     if (sort == 'high') l.sort((a, b) => b.price.compareTo(a.price));
     if (sort == 'low') l.sort((a, b) => a.price.compareTo(b.price));
     return GridView.builder(
-                    padding: const EdgeInsets.all(10),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      childAspectRatio: cols == 2 ? .65 : 1.1,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: l.length,
-                    itemBuilder: (_, i) {
-                      final p = l[i];
-                      return Card(
-                        child: InkWell(
-                          onTap: () => detail(p),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Image.network(p.thumbnail,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.image)),
-                                    ),
-                                    Positioned(
-                                      right: 2,
-                                      top: 2,
-                                      child: IconButton.filledTonal(
-                                        onPressed: () => setState(() => widget.fav.toggle(p)),
-                                        icon: Icon(widget.fav.has(p) ? Icons.favorite : Icons.favorite_border),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(7),
-                                child: Text(p.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(7, 0, 7, 8),
-                                child: Text('\$${p.price.toStringAsFixed(2)}'),
-                              ),
-                            ],
-                          ),
+      padding: const EdgeInsets.all(10),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        childAspectRatio: cols == 2 ? .65 : 1.1,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: l.length,
+      itemBuilder: (_, i) {
+        final p = l[i];
+        return Card(
+          child: InkWell(
+            onTap: () => detail(p),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.network(p.thumbnail,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.image)),
+                      ),
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: IconButton.filledTonal(
+                          onPressed: () => setState(() => widget.fav.toggle(p)),
+                          icon: Icon(widget.fav.has(p)
+                              ? Icons.favorite
+                              : Icons.favorite_border),
                         ),
-                      );
-                    },
-                  );
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(7),
+                  child: Text(p.title,
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(7, 0, 7, 8),
+                  child: Text('\$${p.price.toStringAsFixed(2)}'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -1610,7 +2172,8 @@ class ProductPage extends StatefulWidget {
   final Product p;
   final CartPresenter cart;
   final FavoritePresenter fav;
-  const ProductPage({super.key, required this.p, required this.cart, required this.fav});
+  const ProductPage(
+      {super.key, required this.p, required this.cart, required this.fav});
   @override
   State<ProductPage> createState() => _Product();
 }
@@ -1647,7 +2210,8 @@ class _Product extends State<ProductPage> {
               height: 78,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 itemCount: images.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) => GestureDetector(
@@ -1657,9 +2221,7 @@ class _Product extends State<ProductPage> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                           width: 2,
-                          color: i == _img
-                              ? sch.primary
-                              : sch.outlineVariant),
+                          color: i == _img ? sch.primary : sch.outlineVariant),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -1678,17 +2240,23 @@ class _Product extends State<ProductPage> {
                 Row(
                   children: [
                     if (p.category.isNotEmpty)
-                      _chip(c, Icon(Icons.category_outlined, size: 15), tr(p.category)),
+                      _chip(c, Icon(Icons.category_outlined, size: 15),
+                          tr(p.category)),
                     if (p.brand.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      _chip(c, Icon(Icons.branding_watermark_outlined, size: 15), p.brand),
+                      _chip(
+                          c,
+                          Icon(Icons.branding_watermark_outlined, size: 15),
+                          p.brand),
                     ],
                   ],
                 ),
                 const SizedBox(height: 10),
                 Text(p.title,
                     style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w700, height: 1.25)),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1724,7 +2292,8 @@ class _Product extends State<ProductPage> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 5),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                               color: sch.errorContainer,
                               borderRadius: BorderRadius.circular(999)),
@@ -1741,8 +2310,8 @@ class _Product extends State<ProductPage> {
                 if (disc > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text(l10n.discountLine(
-                        disc.toStringAsFixed(0), save),
+                    child: Text(
+                        l10n.discountLine(disc.toStringAsFixed(0), save),
                         style: TextStyle(
                             color: sch.error, fontWeight: FontWeight.w600)),
                   ),
@@ -1818,7 +2387,8 @@ class _Product extends State<ProductPage> {
         children: [
           icon,
           const SizedBox(width: 5),
-          Text(label, style: TextStyle(color: sch.onSecondaryContainer, fontSize: 13)),
+          Text(label,
+              style: TextStyle(color: sch.onSecondaryContainer, fontSize: 13)),
         ],
       ),
     );
@@ -1833,10 +2403,7 @@ class CartPage extends StatefulWidget {
   /// panel can show who ordered what.
   final String owner;
   const CartPage(
-      {super.key,
-      required this.cart,
-      required this.orders,
-      this.owner = ''});
+      {super.key, required this.cart, required this.orders, this.owner = ''});
   @override
   State<CartPage> createState() => _Cart();
 }
@@ -1844,8 +2411,23 @@ class CartPage extends StatefulWidget {
 class _Cart extends State<CartPage> {
   Future<void> checkout() async {
     if (widget.cart.items.isEmpty) return;
-    final a = await Navigator.push<Address>(context, MaterialPageRoute(builder: (_) => const AddressPage()));
+    final a = await Navigator.push<Address>(
+        context, MaterialPageRoute(builder: (_) => const AddressPage()));
     if (a == null || !mounted) return;
+    // Do not create the order or clear the cart until the shopper has seen
+    // the exact total and the QR(s) for the vendor(s) being paid.
+    final reference = DateTime.now().millisecondsSinceEpoch.toString();
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _VendorPaymentSheet(
+        items: widget.cart.items,
+        total: widget.cart.grandTotal,
+        tax: widget.cart.tax,
+        reference: reference,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     widget.orders.create(widget.cart.items, widget.cart.grandTotal, a,
         owner: widget.owner);
     widget.cart.clear();
@@ -1853,7 +2435,8 @@ class _Cart extends State<CartPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(AppLocalizations.of(context).t('Order placed')),
-        content: Text(AppLocalizations.of(context).t('Your order was created successfully.')),
+        content: Text(AppLocalizations.of(context)
+            .t('Your order was created successfully.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1901,13 +2484,11 @@ class _Cart extends State<CartPage> {
               ],
       ),
       body: items.isEmpty ? _empty(c, tr, sch) : _list(c, tr, sch),
-      bottomNavigationBar:
-          items.isEmpty ? null : _summary(c, tr, sch),
+      bottomNavigationBar: items.isEmpty ? null : _summary(c, tr, sch),
     );
   }
 
-  Widget _empty(BuildContext c, String Function(String) tr,
-      ColorScheme sch) {
+  Widget _empty(BuildContext c, String Function(String) tr, ColorScheme sch) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1926,8 +2507,8 @@ class _Cart extends State<CartPage> {
             ),
             const SizedBox(height: 22),
             Text(tr('Your cart is empty'),
-                style: const TextStyle(
-                    fontSize: 19, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text(
               tr('Looks like you have no items in your cart yet.'),
@@ -1946,8 +2527,8 @@ class _Cart extends State<CartPage> {
     );
   }
 
-  Widget _itemCard(BuildContext c, String Function(String) tr,
-      ColorScheme sch, CartItem x) {
+  Widget _itemCard(
+      BuildContext c, String Function(String) tr, ColorScheme sch, CartItem x) {
     final p = x.product;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1987,7 +2568,9 @@ class _Cart extends State<CartPage> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600, height: 1.2)),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2)),
                   const SizedBox(height: 4),
                   if (p.brand.isNotEmpty || p.category.isNotEmpty)
                     Row(
@@ -2020,8 +2603,8 @@ class _Cart extends State<CartPage> {
     );
   }
 
-  Widget _bottomRow(BuildContext c, String Function(String) tr,
-      ColorScheme sch, CartItem x) {
+  Widget _bottomRow(
+      BuildContext c, String Function(String) tr, ColorScheme sch, CartItem x) {
     final p = x.product;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -2032,8 +2615,8 @@ class _Cart extends State<CartPage> {
           Text('${tr('Subtotal')}: ',
               style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
           Text('\$${x.subtotal.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w800)),
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           IconButton(
             tooltip: tr('Remove'),
             onPressed: () => setState(() => widget.cart.remove(p)),
@@ -2067,8 +2650,8 @@ class _Cart extends State<CartPage> {
             width: 26,
             child: Text('${x.quantity}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
           btn(Icons.add, () => setState(() => widget.cart.add(p))),
         ],
@@ -2086,8 +2669,8 @@ class _Cart extends State<CartPage> {
             children: [
               Text(
                 '${widget.cart.count} ${tr('Items')}',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               Text('\$${widget.cart.grandTotal.toStringAsFixed(2)}',
@@ -2139,9 +2722,7 @@ class _Cart extends State<CartPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _row(
-                  tr('Subtotal'),
-                  '\$${widget.cart.total.toStringAsFixed(2)}'),
+              _row(tr('Subtotal'), '\$${widget.cart.total.toStringAsFixed(2)}'),
               const SizedBox(height: 6),
               _row(
                   '${tr('Tax')} (${(CartPresenter.taxRate * 100).toStringAsFixed(0)}%)',
@@ -2155,8 +2736,7 @@ class _Cart extends State<CartPage> {
                   Text(tr('Total'),
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w700)),
-                  Text(
-                      '\$${widget.cart.grandTotal.toStringAsFixed(2)}',
+                  Text('\$${widget.cart.grandTotal.toStringAsFixed(2)}',
                       style: priceStyle),
                 ],
               ),
@@ -2188,7 +2768,9 @@ class _Cart extends State<CartPage> {
         children: [
           Text(label,
               style: const TextStyle(
-                  fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+                  fontSize: 14,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500)),
           Text(value,
               style: TextStyle(
                   fontSize: 14,
@@ -2196,6 +2778,127 @@ class _Cart extends State<CartPage> {
                   color: Colors.green.shade600)),
         ],
       );
+}
+
+/// Checkout confirmation for QR payments. A cart can contain products from
+/// multiple vendors, so each vendor receives a separate exact amount.
+class _VendorPaymentSheet extends StatelessWidget {
+  final List<CartItem> items;
+  final double total;
+  final double tax;
+  final String reference;
+  const _VendorPaymentSheet({
+    required this.items,
+    required this.total,
+    required this.tax,
+    required this.reference,
+  });
+
+  Map<String, double> get _vendorAmounts {
+    final subtotals = <String, double>{};
+    for (final item in items) {
+      final vendor = item.product.vendorUsername.trim().isEmpty
+          ? 'store'
+          : item.product.vendorUsername.trim();
+      subtotals[vendor] = (subtotals[vendor] ?? 0) + item.subtotal;
+    }
+    final subtotal = subtotals.values.fold<double>(0, (a, b) => a + b);
+    return {
+      for (final entry in subtotals.entries)
+        entry.key: entry.value + (subtotal == 0 ? 0 : tax * entry.value / subtotal),
+    };
+  }
+
+  String _paymentData(String vendor, double amount) {
+    final code = items
+        .where((item) =>
+            (item.product.vendorUsername.trim().isEmpty ? 'store' : item.product.vendorUsername.trim()) == vendor)
+        .map((item) => item.product.vendorPaymentCode.trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    // Vendors can store a bank/KHQR payload. The fallback remains useful for
+    // demo vendors: it identifies vendor, amount and immutable order reference.
+    return code.isNotEmpty
+        ? code
+        : 'online-shop-payment://pay?vendor=${Uri.encodeComponent(vendor)}&amount=${amount.toStringAsFixed(2)}&reference=$reference';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final amounts = _vendorAmounts;
+    final sch = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        initialChildSize: .78,
+        minChildSize: .48,
+        maxChildSize: .94,
+        expand: false,
+        builder: (_, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: sch.outlineVariant,
+                    borderRadius: BorderRadius.circular(99)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text('Payment confirmation',
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text('Amount to pay', style: TextStyle(color: sch.onSurfaceVariant)),
+            Text('\$${total.toStringAsFixed(2)}',
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: sch.primary)),
+            const SizedBox(height: 8),
+            Text('Reference: $reference', style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
+            const SizedBox(height: 18),
+            for (final entry in amounts.entries) ...[
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: sch.outlineVariant)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(children: [
+                    Text(entry.key == 'store' ? 'Store payment' : 'Pay vendor @${entry.key}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text('\$${entry.value.toStringAsFixed(2)}',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: sch.primary)),
+                    const SizedBox(height: 12),
+                    QrImageView(
+                      data: _paymentData(entry.key, entry.value),
+                      version: QrVersions.auto,
+                      size: 190,
+                      backgroundColor: Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Scan this QR in your payment app, then confirm payment.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.verified_outlined),
+              label: const Text('I have paid — place order'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AddressPage extends StatefulWidget {
@@ -2223,8 +2926,8 @@ class _Address extends State<AddressPage> {
   @override
   void initState() {
     super.initState();
-    _pos = LatLng(
-        widget.initial?.latitude ?? 11.5564, widget.initial?.longitude ?? 104.9282);
+    _pos = LatLng(widget.initial?.latitude ?? 11.5564,
+        widget.initial?.longitude ?? 104.9282);
   }
 
   void _setPin(LatLng p) {
@@ -2280,8 +2983,8 @@ class _Address extends State<AddressPage> {
   void go() {
     if (n.text.isEmpty || ph.text.isEmpty || a.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              AppLocalizations.of(context).t('Please complete delivery information'))));
+          content: Text(AppLocalizations.of(context)
+              .t('Please complete delivery information'))));
       return;
     }
     Navigator.pop(
@@ -2303,7 +3006,8 @@ class _Address extends State<AddressPage> {
     final sch = Theme.of(c).colorScheme;
     return Scaffold(
       appBar: AppBar(
-          title: Text(widget.saveMode ? tr('My Address') : tr('Delivery Address'))),
+          title: Text(
+              widget.saveMode ? tr('My Address') : tr('Delivery Address'))),
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
@@ -2323,7 +3027,8 @@ class _Address extends State<AddressPage> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.online_shop_mvp_full',
                   ),
                   MarkerLayer(
@@ -2452,9 +3157,7 @@ class _Cat extends State<CategoryPage> {
           child: Row(
             children: [
               Icon(
-                sort == v
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
+                sort == v ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 18,
                 color: sort == v ? sch.primary : null,
               ),
@@ -2520,8 +3223,9 @@ class _Cat extends State<CategoryPage> {
                     top: 2,
                     child: IconButton.filledTonal(
                       onPressed: () => setState(() => widget.fav.toggle(x)),
-                      icon: Icon(
-                          widget.fav.has(x) ? Icons.favorite : Icons.favorite_border),
+                      icon: Icon(widget.fav.has(x)
+                          ? Icons.favorite
+                          : Icons.favorite_border),
                     ),
                   ),
                 ],
@@ -2529,8 +3233,8 @@ class _Cat extends State<CategoryPage> {
             ),
             Padding(
               padding: const EdgeInsets.all(7),
-              child: Text(x.title,
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              child:
+                  Text(x.title, maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(7, 0, 7, 8),
@@ -2546,89 +3250,90 @@ class _Cat extends State<CategoryPage> {
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     return Scaffold(
-        appBar: AppBar(title: Text(tr('Categories'))),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-              child: TextField(
-                controller: sq,
-                onChanged: (_) => load(p.search(sq.text)),
-                onSubmitted: (_) => load(p.search(sq.text)),
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: tr('Search products or categories'),
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: sq.text.isEmpty
-                      ? null
-                      : IconButton(icon: const Icon(Icons.clear), onPressed: catClear),
-                  filled: true,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none),
-                ),
+      appBar: AppBar(title: Text(tr('Categories'))),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+            child: TextField(
+              controller: sq,
+              onChanged: (_) => load(p.search(sq.text)),
+              onSubmitted: (_) => load(p.search(sq.text)),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: tr('Search products or categories'),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: sq.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear), onPressed: catClear),
+                filled: true,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none),
               ),
             ),
-            SizedBox(
-              height: 88,
-              child: FutureBuilder<List<Category>>(
-                future: cats,
-                builder: (_, s) => !s.hasData
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: s.data!.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) => ActionChip(
-                          label: Text(tr(s.data![i].name)),
-                          onPressed: () => load(p.products(s.data![i].slug)),
-                        ),
+          ),
+          SizedBox(
+            height: 88,
+            child: FutureBuilder<List<Category>>(
+              future: cats,
+              builder: (_, s) => !s.hasData
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: s.data!.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) => ActionChip(
+                        label: Text(tr(s.data![i].name)),
+                        onPressed: () => load(p.products(s.data![i].slug)),
                       ),
-              ),
+                    ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
-              child: Row(
-                children: [
-                  Flexible(child: _sortButton(c, tr)),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    tooltip: tr('1 Column'),
-                    isSelected: cols == 1,
-                    onPressed: () => setState(() => cols = 1),
-                    icon: const Icon(Icons.view_agenda_outlined),
-                  ),
-                  IconButton(
-                    tooltip: tr('2 Columns'),
-                    isSelected: cols == 2,
-                    onPressed: () => setState(() => cols = 2),
-                    icon: const Icon(Icons.grid_on),
-                  ),
-                ],
-              ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
+            child: Row(
+              children: [
+                Flexible(child: _sortButton(c, tr)),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: tr('1 Column'),
+                  isSelected: cols == 1,
+                  onPressed: () => setState(() => cols = 1),
+                  icon: const Icon(Icons.view_agenda_outlined),
+                ),
+                IconButton(
+                  tooltip: tr('2 Columns'),
+                  isSelected: cols == 2,
+                  onPressed: () => setState(() => cols = 2),
+                  icon: const Icon(Icons.grid_on),
+                ),
+              ],
             ),
-            const Divider(height: 16, thickness: 1),
-            Expanded(
-              child: items == null
-                  ? Center(child: Text(tr('Select a category or search')))
-                  : shown.isEmpty
-                      ? Center(child: Text(tr('No products found')))
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(10),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cols,
-                            childAspectRatio: cols == 2 ? 0.65 : 1.1,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                          itemCount: shown.length,
-                          itemBuilder: (_, i) => _cell(c, shown[i]),
+          ),
+          const Divider(height: 16, thickness: 1),
+          Expanded(
+            child: items == null
+                ? Center(child: Text(tr('Select a category or search')))
+                : shown.isEmpty
+                    ? Center(child: Text(tr('No products found')))
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: cols,
+                          childAspectRatio: cols == 2 ? 0.65 : 1.1,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
                         ),
-            ),
-          ],
-        ),
-      );
+                        itemCount: shown.length,
+                        itemBuilder: (_, i) => _cell(c, shown[i]),
+                      ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2636,7 +3341,8 @@ class FavoritePage extends StatefulWidget {
   final FavoritePresenter fav;
   final CartPresenter cart;
   final Future<List<Product>> source;
-  const FavoritePage({super.key, required this.fav, required this.cart, required this.source});
+  const FavoritePage(
+      {super.key, required this.fav, required this.cart, required this.source});
   @override
   State<FavoritePage> createState() => _Fav();
 }
@@ -2679,8 +3385,8 @@ class _Fav extends State<FavoritePage> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Text(p.title,
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              child:
+                  Text(p.title, maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
@@ -2720,7 +3426,8 @@ class _Fav extends State<FavoritePage> {
       body: FutureBuilder<List<Product>>(
         future: widget.source,
         builder: (_, s) {
-          if (!s.hasData) return const Center(child: CircularProgressIndicator());
+          if (!s.hasData)
+            return const Center(child: CircularProgressIndicator());
           final list = widget.fav.ids.isEmpty
               ? <Product>[]
               : s.data!.where((p) => widget.fav.has(p)).toList();
@@ -2757,6 +3464,7 @@ class _Fav extends State<FavoritePage> {
 
 class ProfilePage extends StatefulWidget {
   final User user;
+
   /// Stable key of the SIGNED-IN account (computed from the raw session
   /// user, not the merged one) so profile edits stay attached to this login.
   final String ownerKey;
@@ -2765,6 +3473,14 @@ class ProfilePage extends StatefulWidget {
   final OrderPresenter orders;
   final Future<List<Product>> products;
   final VoidCallback logout;
+
+  /// Lets the admin Settings page switch the whole app's language live.
+  final void Function(Locale)? setLocale;
+
+  /// Theme state + callback so this page's Admin panel keeps working when
+  /// the admin toggles Light/Dark mode from the top bar.
+  final bool dark;
+  final ValueChanged<bool>? setTheme;
 
   /// Non-null when the signed-in user is an admin, which unlocks the
   /// Admin panel entry on this page.
@@ -2778,6 +3494,9 @@ class ProfilePage extends StatefulWidget {
       required this.orders,
       required this.products,
       required this.logout,
+      this.dark = false,
+      this.setTheme,
+      this.setLocale,
       this.admin});
   @override
   State<ProfilePage> createState() => _Profile();
@@ -2813,15 +3532,20 @@ class _Profile extends State<ProfilePage> {
     final edited = await Navigator.push<User>(
       context,
       MaterialPageRoute(
-          builder: (_) => EditProfilePage(
-              user: user, ownerKey: widget.ownerKey)),
+          builder: (_) =>
+              EditProfilePage(user: user, ownerKey: widget.ownerKey)),
     );
     if (edited != null && mounted) setState(() => user = edited);
   }
 
   void _openCart() {
-    Navigator.push(context,
-            MaterialPageRoute(builder: (_) => CartPage(cart: widget.cart, orders: widget.orders, owner: widget.user.username)))
+    Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CartPage(
+                    cart: widget.cart,
+                    orders: widget.orders,
+                    owner: widget.user.username)))
         .then((_) => mounted ? setState(() {}) : null);
   }
 
@@ -2830,7 +3554,9 @@ class _Profile extends State<ProfilePage> {
             context,
             MaterialPageRoute(
                 builder: (_) => FavoritePage(
-                    fav: widget.fav, cart: widget.cart, source: widget.products)))
+                    fav: widget.fav,
+                    cart: widget.cart,
+                    source: widget.products)))
         .then((_) => mounted ? setState(() {}) : null);
   }
 
@@ -2848,26 +3574,31 @@ class _Profile extends State<ProfilePage> {
     if (repo == null) return;
     // Admin panel is desktop-only (never opens on phones).
     if (!ApiService.isAdminDevice) return;
-    Navigator.push(context,
+    Navigator.push(
+            context,
             MaterialPageRoute(
                 builder: (_) => AdminPanelPage(
                     admin: user,
                     repo: repo,
                     orders: widget.orders,
+                    dark: widget.dark,
+                    setTheme: widget.setTheme,
+                    setLocale: widget.setLocale,
                     onLogout: widget.logout)))
         .then((_) => mounted ? setState(() {}) : null);
   }
 
   void _openSupport() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const SupportPage()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const SupportPage()));
   }
 
   Future<void> _openAddress() async {
     final saved = await Navigator.push<Address>(
       context,
       MaterialPageRoute(
-          builder: (_) => AddressPage(initial: AppSettings.savedAddress, saveMode: true)),
+          builder: (_) =>
+              AddressPage(initial: AppSettings.savedAddress, saveMode: true)),
     );
     if (saved != null && mounted) {
       await AppSettings.saveAddress(saved);
@@ -2881,13 +3612,13 @@ class _Profile extends State<ProfilePage> {
   }
 
   void _openAbout() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const AboutUsPage()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const AboutUsPage()));
   }
 
   void _openContact() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const ContactUsPage()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const ContactUsPage()));
   }
 
   void _openFaq() {
@@ -2900,24 +3631,26 @@ class _Profile extends State<ProfilePage> {
   }
 
   void _openPrivacy() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()));
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()));
   }
 
   void _openDeleteAccount() {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => DeleteAccountPage(
-            user: user,
-            loginUsername: widget.user.username,
-            ownerKey: widget.ownerKey,
-            orders: widget.orders,
-            cart: widget.cart,
-            fav: widget.fav,
-            onDeleted: widget.logout)));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => DeleteAccountPage(
+                user: user,
+                loginUsername: widget.user.username,
+                ownerKey: widget.ownerKey,
+                orders: widget.orders,
+                cart: widget.cart,
+                fav: widget.fav,
+                onDeleted: widget.logout)));
   }
 
-  Widget _stat(BuildContext c, IconData icon, int n, String label,
-      VoidCallback onTap) {
+  Widget _stat(
+      BuildContext c, IconData icon, int n, String label, VoidCallback onTap) {
     final sch = Theme.of(c).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -2930,11 +3663,12 @@ class _Profile extends State<ProfilePage> {
             const SizedBox(height: 6),
             Text('$n',
                 style: TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w800, color: sch.primary)),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: sch.primary)),
             const SizedBox(height: 2),
             Text(label,
-                style: TextStyle(
-                    fontSize: 12, color: sch.onSurfaceVariant)),
+                style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
           ],
         ),
       ),
@@ -2982,146 +3716,150 @@ class _Profile extends State<ProfilePage> {
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
             child: Row(
               children: [
-                    SizedBox(
-                      width: 112,
-                      height: 112,
-                      child: Stack(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                  colors: [Colors.white, Colors.white70],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6)),
+                SizedBox(
+                  width: 112,
+                  height: 112,
+                  child: Stack(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                              colors: [
+                                sch.surfaceContainerHighest,
+                                sch.surfaceContainerLow,
                               ],
-                            ),
-                            child: CircleAvatar(
-                              radius: 52,
-                              backgroundColor: Colors.white,
-                              backgroundImage: user.image == null || _imgFailed
-                                  ? null
-                                  : userImage(user.image),
-                              onBackgroundImageError: user.image == null
-                                  ? null
-                                  : (_, __) => setState(() => _imgFailed = true),
-                              child: _imgFailed
-                                  ? Icon(Icons.person, size: 60, color: sch.primary)
-                                  : user.image == null
-                                      ? Icon(Icons.person, size: 60, color: sch.primary)
-                                      : null,
-                            ),
-                          ),
-                          Positioned(
-                            right: 2,
-                            bottom: 2,
-                            child: GestureDetector(
-                              onTap: _edit,
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  color: sch.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                ),
-                                child: Icon(Icons.photo_camera,
-                                    size: 16, color: sch.onPrimary),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-Text(user.fullName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                  color: sch.onSurface,
-                                )),
-                          const SizedBox(height: 8),
-Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: sch.secondaryContainer,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text('@${user.username}',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: sch.onSecondaryContainer)),
-                            ),
-                          const SizedBox(height: 8),
-if (user.email.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: sch.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.email_outlined,
-                                      size: 15, color: sch.onSecondaryContainer),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(user.email,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: sch.onSecondaryContainer)),
-                                  ),
-                                ],
-                              ),
-                            ),
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withOpacity(0.25),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6)),
                           ],
-                          if (user.phone.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: sch.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.phone_outlined,
-                                      size: 15, color: sch.onSecondaryContainer),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(user.phone,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: sch.onSecondaryContainer)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 52,
+                          backgroundColor: sch.surfaceContainerHigh,
+                          backgroundImage: user.image == null || _imgFailed
+                              ? null
+                              : userImage(user.image),
+                          onBackgroundImageError: user.image == null
+                              ? null
+                              : (_, __) => setState(() => _imgFailed = true),
+                          child: _imgFailed
+                              ? Icon(Icons.person, size: 60, color: sch.primary)
+                              : user.image == null
+                                  ? Icon(Icons.person,
+                                      size: 60, color: sch.primary)
+                                  : null,
+                        ),
                       ),
-                    ),
-],
-              ),
-      ),
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: GestureDetector(
+                          onTap: _edit,
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: sch.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Icon(Icons.photo_camera,
+                                size: 16, color: sch.onPrimary),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.fullName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: sch.onSurface,
+                          )),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: sch.secondaryContainer,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text('@${user.username}',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: sch.onSecondaryContainer)),
+                      ),
+                      const SizedBox(height: 8),
+                      if (user.email.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: sch.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.email_outlined,
+                                  size: 15, color: sch.onSecondaryContainer),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(user.email,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: sch.onSecondaryContainer)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (user.phone.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: sch.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.phone_outlined,
+                                  size: 15, color: sch.onSecondaryContainer),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(user.phone,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: sch.onSecondaryContainer)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
             child: Column(
@@ -3139,14 +3877,24 @@ if (user.email.isNotEmpty) ...[
                         Expanded(
                             child: _stat(c, Icons.shopping_cart_outlined,
                                 widget.cart.count, tr('Cart'), _openCart)),
-                        Container(width: 1, height: 44, color: sch.outlineVariant),
+                        Container(
+                            width: 1, height: 44, color: sch.outlineVariant),
                         Expanded(
-                            child: _stat(c, Icons.favorite_outline,
-                                widget.fav.ids.length, tr('Favorites'), _openFav)),
-                        Container(width: 1, height: 44, color: sch.outlineVariant),
+                            child: _stat(
+                                c,
+                                Icons.favorite_outline,
+                                widget.fav.ids.length,
+                                tr('Favorites'),
+                                _openFav)),
+                        Container(
+                            width: 1, height: 44, color: sch.outlineVariant),
                         Expanded(
-                            child: _stat(c, Icons.receipt_long_outlined,
-                                widget.orders.orders.length, tr('Orders'), _openOrders)),
+                            child: _stat(
+                                c,
+                                Icons.receipt_long_outlined,
+                                widget.orders.orders.length,
+                                tr('Orders'),
+                                _openOrders)),
                       ],
                     ),
                   ),
@@ -3212,22 +3960,30 @@ if (user.email.isNotEmpty) ...[
                       side: BorderSide(color: sch.outlineVariant)),
                   child: Column(
                     children: [
-                      _action(c, Icons.shopping_cart_outlined, tr('Cart'), _openCart),
+                      _action(c, Icons.shopping_cart_outlined, tr('Cart'),
+                          _openCart),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.favorite_outline, tr('Favorites'), _openFav),
+                      _action(
+                          c, Icons.favorite_outline, tr('Favorites'), _openFav),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.receipt_long_outlined, tr('Order History'), _openOrders),
+                      _action(c, Icons.receipt_long_outlined,
+                          tr('Order History'), _openOrders),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.location_on_outlined, tr('My Address'), _openAddress),
+                      _action(c, Icons.location_on_outlined, tr('My Address'),
+                          _openAddress),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.chat_bubble_outline, tr('Chat Support'), _openSupport),
+                      _action(c, Icons.chat_bubble_outline, tr('Chat Support'),
+                          _openSupport),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.edit_outlined, tr('Edit Profile'), _edit),
+                      _action(
+                          c, Icons.edit_outlined, tr('Edit Profile'), _edit),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.lock_reset_outlined, tr('Change Password'), _openPassword),
+                      _action(c, Icons.lock_reset_outlined,
+                          tr('Change Password'), _openPassword),
                       // Admin panel entry only exists on the computer.
                       if (widget.admin != null && ApiService.isAdminDevice) ...[
-                        Divider(height: 1, indent: 58, color: sch.outlineVariant),
+                        Divider(
+                            height: 1, indent: 58, color: sch.outlineVariant),
                         _action(c, Icons.admin_panel_settings_outlined,
                             tr('Admin Panel'), _openAdmin),
                       ],
@@ -3243,15 +3999,19 @@ if (user.email.isNotEmpty) ...[
                       side: BorderSide(color: sch.outlineVariant)),
                   child: Column(
                     children: [
-                      _action(c, Icons.info_outline, tr('About Us'), _openAbout),
+                      _action(
+                          c, Icons.info_outline, tr('About Us'), _openAbout),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.contact_phone_outlined, tr('Contact Us'), _openContact),
+                      _action(c, Icons.contact_phone_outlined, tr('Contact Us'),
+                          _openContact),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
                       _action(c, Icons.help_outline, tr('FAQs'), _openFaq),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.description_outlined, tr('Terms & Conditions'), _openTerms),
+                      _action(c, Icons.description_outlined,
+                          tr('Terms & Conditions'), _openTerms),
                       Divider(height: 1, indent: 58, color: sch.outlineVariant),
-                      _action(c, Icons.privacy_tip_outlined, tr('Privacy Policy'), _openPrivacy),
+                      _action(c, Icons.privacy_tip_outlined,
+                          tr('Privacy Policy'), _openPrivacy),
                     ],
                   ),
                 ),
@@ -3263,7 +4023,8 @@ if (user.email.isNotEmpty) ...[
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(color: sch.errorContainer)),
                   color: sch.errorContainer.withValues(alpha: 0.35),
-                  child: _action(c, Icons.delete_forever_outlined, tr('Delete Account'), _openDeleteAccount),
+                  child: _action(c, Icons.delete_forever_outlined,
+                      tr('Delete Account'), _openDeleteAccount),
                 ),
               ],
             ),
@@ -3276,10 +4037,12 @@ if (user.email.isNotEmpty) ...[
 
 class EditProfilePage extends StatefulWidget {
   final User user;
+
   /// Key of the account this profile belongs to (email/username based), so
   /// edits are stored per account and never leak into another login.
   final String ownerKey;
-  const EditProfilePage({super.key, required this.user, required this.ownerKey});
+  const EditProfilePage(
+      {super.key, required this.user, required this.ownerKey});
   @override
   State<EditProfilePage> createState() => _EditProfile();
 }
@@ -3372,20 +4135,19 @@ class _EditProfile extends State<EditProfilePage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(dc),
-              child: Text(tr('Cancel'))),
+              onPressed: () => Navigator.pop(dc), child: Text(tr('Cancel'))),
           TextButton(
-              onPressed: () =>
-                  Navigator.pop(dc, ctrl.text.trim()),
+              onPressed: () => Navigator.pop(dc, ctrl.text.trim()),
               child: Text(tr('OK'))),
         ],
       ),
     );
     if (url != null && url.isNotEmpty) {
-      if (mounted) setState(() {
-        _url = url;
-        _b64 = null;
-      });
+      if (mounted)
+        setState(() {
+          _url = url;
+          _b64 = null;
+        });
     }
   }
 
@@ -3444,7 +4206,8 @@ class _EditProfile extends State<EditProfilePage> {
                         shape: BoxShape.circle,
                         border: Border.all(color: sch.surface, width: 2),
                       ),
-                      child: Icon(Icons.camera_alt, size: 18, color: sch.onPrimary),
+                      child: Icon(Icons.camera_alt,
+                          size: 18, color: sch.onPrimary),
                     ),
                   ),
                 ],
@@ -3466,8 +4229,7 @@ class _EditProfile extends State<EditProfilePage> {
                 validator: (v) => v == null || v.trim().isEmpty ? ' ' : null),
             _field(c, email, tr('Email'), Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                    v != null && v.contains('@') ? null : ' '),
+                validator: (v) => v != null && v.contains('@') ? null : ' '),
             _field(c, phone, tr('Phone'), Icons.phone_outlined,
                 keyboardType: TextInputType.phone),
             const SizedBox(height: 24),
@@ -3484,8 +4246,8 @@ class _EditProfile extends State<EditProfilePage> {
     );
   }
 
-  Widget _field(BuildContext c, TextEditingController ctrl, String label,
-      IconData icon,
+  Widget _field(
+      BuildContext c, TextEditingController ctrl, String label, IconData icon,
       {String? Function(String?)? validator,
       TextInputType? keyboardType,
       ValueChanged<String>? onChanged}) {
@@ -3499,8 +4261,7 @@ class _EditProfile extends State<EditProfilePage> {
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -3537,9 +4298,7 @@ class _Settings extends State<SettingsPage> {
         title: Text(l.t('Theme')),
         children: [
           ListTile(
-            leading: Icon(dark
-                ? Icons.check_circle
-                : Icons.circle_outlined),
+            leading: Icon(dark ? Icons.check_circle : Icons.circle_outlined),
             title: Text(l.t('Dark mode')),
             onTap: () {
               Navigator.pop(c);
@@ -3548,9 +4307,7 @@ class _Settings extends State<SettingsPage> {
             },
           ),
           ListTile(
-            leading: Icon(!dark
-                ? Icons.check_circle
-                : Icons.circle_outlined),
+            leading: Icon(!dark ? Icons.check_circle : Icons.circle_outlined),
             title: Text(l.t('Light mode')),
             onTap: () {
               Navigator.pop(c);
@@ -3565,6 +4322,7 @@ class _Settings extends State<SettingsPage> {
 
   void _chooseLanguage(BuildContext c) {
     final l = AppLocalizations.of(c);
+    final current = l.locale.languageCode;
     showDialog(
       context: c,
       builder: (_) => SimpleDialog(
@@ -3572,33 +4330,34 @@ class _Settings extends State<SettingsPage> {
         children: [
           ListTile(
             leading: Icon(
-                l.locale.languageCode == 'en'
-                    ? Icons.check_circle
-                    : Icons.circle_outlined),
-            title: const Text('English'),
+                current == 'en'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: current == 'en' ? const Color(0xFF5B4FE9) : null),
+            title: const Text('\u{1F1EC}\u{1F1E7}  English'),
             onTap: () {
               Navigator.pop(c);
-              widget.setLocale(const Locale('en'));
+              if (current != 'en') widget.setLocale(const Locale('en'));
             },
           ),
-ListTile(
-              leading: Icon(
-                  l.locale.languageCode == 'km'
-                      ? Icons.check_circle
-                      : Icons.circle_outlined),
-              title: Text('ភាសាខ្មែរ'),
-              onTap: () {
-                Navigator.pop(c);
-                widget.setLocale(const Locale('km'));
-              },
-            ),
-          ],
-        ),
+          ListTile(
+            leading: Icon(
+                current == 'km'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: current == 'km' ? const Color(0xFF5B4FE9) : null),
+            title: const Text('\u{1F1F0}\u{1F1ED}  ភាសាខ្មែរ'),
+            onTap: () {
+              Navigator.pop(c);
+              if (current != 'km') widget.setLocale(const Locale('km'));
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  Future<void> _configureGoogle(
-      BuildContext c, AppLocalizations l) async {
+  Future<void> _configureGoogle(BuildContext c, AppLocalizations l) async {
     final serverCtl = TextEditingController(text: AppSettings.googleClientId);
     final androidCtl =
         TextEditingController(text: AppSettings.googleAndroidClientId);
@@ -3625,8 +4384,7 @@ ListTile(
               decoration: InputDecoration(
                 labelText: l.t('Android client ID (optional)'),
                 hintText: 'xxx.apps.googleusercontent.com',
-                helperText:
-                    l.t('Usually not needed on Android here'),
+                helperText: l.t('Usually not needed on Android here'),
               ),
             ),
           ],
@@ -3651,8 +4409,8 @@ ListTile(
         await AppSettings.saveGoogleAndroidClientId(androidId);
       }
       if (c.mounted) {
-        ScaffoldMessenger.of(c).showSnackBar(SnackBar(
-            content: Text(l.t('Google client ID saved'))));
+        ScaffoldMessenger.of(c).showSnackBar(
+            SnackBar(content: Text(l.t('Google client ID saved'))));
       }
     }
     serverCtl.dispose();
@@ -3663,55 +4421,55 @@ ListTile(
   Widget build(BuildContext c) {
     final l = AppLocalizations.of(c);
     return Scaffold(
-        appBar: AppBar(title: Text(l.t('Settings'))),
-        body: ListView(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.dark_mode),
-              title: Text(l.t('Theme')),
-              subtitle: Text(dark ? l.t('Dark mode') : l.t('Light mode')),
-              trailing: const Icon(Icons.arrow_drop_down),
-              onTap: () => _chooseTheme(c),
+      appBar: AppBar(title: Text(l.t('Settings'))),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.dark_mode),
+            title: Text(l.t('Theme')),
+            subtitle: Text(dark ? l.t('Dark mode') : l.t('Light mode')),
+            trailing: const Icon(Icons.arrow_drop_down),
+            onTap: () => _chooseTheme(c),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications),
+            title: Text(l.t('Notifications')),
+            subtitle: Text(l.t('Receive discount alerts')),
+            value: notifications,
+            onChanged: _setNotifications,
+          ),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(l.t('Language')),
+            subtitle: Text(l.locale.languageCode == 'km'
+                ? '\u{1F1F0}\u{1F1ED} ភាសាខ្មែរ'
+                : '\u{1F1EC}\u{1F1E7} ${l.t('English')}'),
+            trailing: const Icon(Icons.arrow_drop_down),
+            onTap: () => _chooseLanguage(c),
+          ),
+          ListTile(
+            leading: const Icon(Icons.g_mobiledata, color: Colors.blue),
+            title: Text(l.t('Google Sign-In')),
+            subtitle: Text((AppSettings.googleClientId.isNotEmpty ||
+                    AppSettings.googleAndroidClientId.isNotEmpty)
+                ? l.t('Configured')
+                : l.t('Not configured')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _configureGoogle(c, l),
+          ),
+          const Divider(),
+          ListTile(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset('assets/images/image.png',
+                  height: 28, fit: BoxFit.contain),
             ),
-            SwitchListTile(
-              secondary: const Icon(Icons.notifications),
-              title: Text(l.t('Notifications')),
-              subtitle: Text(l.t('Receive discount alerts')),
-              value: notifications,
-              onChanged: _setNotifications,
-            ),
-            ListTile(
-              leading: const Icon(Icons.language),
-              title: Text(l.t('Language')),
-              subtitle: Text(l.locale.languageCode == 'km'
-                  ? 'ភាសាខ្មែរ'
-                  : l.t('English')),
-              trailing: const Icon(Icons.arrow_drop_down),
-              onTap: () => _chooseLanguage(c),
-            ),
-            ListTile(
-              leading: const Icon(Icons.g_mobiledata, color: Colors.blue),
-              title: Text(l.t('Google Sign-In')),
-              subtitle: Text((AppSettings.googleClientId.isNotEmpty ||
-                      AppSettings.googleAndroidClientId.isNotEmpty)
-                  ? l.t('Configured')
-                  : l.t('Not configured')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _configureGoogle(c, l),
-            ),
-            const Divider(),
-            ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset('assets/images/image.png',
-                    height: 28, fit: BoxFit.contain),
-              ),
-              title: const Text('Global Online'),
-              subtitle: const Text('Version 1.0.0'),
-            ),
-          ],
-        ),
-      );
+            title: const Text('Global Online'),
+            subtitle: const Text('Version 1.0.0'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -3729,7 +4487,7 @@ class SupportPage extends StatelessWidget {
 /// Data is reloaded fresh from the cloud every time the page opens (so the
 /// latest admin status is always shown, never stale local data), on
 /// pull-to-refresh, and live whenever the admin changes an order's status
-/// (Supabase realtime, with a 20s poll as fallback).
+/// (Supabase realtime, with a 3s poll as fallback).
 class OrderPage extends StatefulWidget {
   /// Username of the account whose history to show (empty = all/local).
   final String owner;
@@ -3747,11 +4505,11 @@ class _OrderPageState extends State<OrderPage> {
   void initState() {
     super.initState();
     _reload();
-    // Fallback when realtime is unavailable: quietly refetch every 20s.
-    _poll = Timer.periodic(const Duration(seconds: 20), (_) => _reload());
+    // Fallback when realtime is unavailable: quietly refetch often enough
+    // that a status the admin changed shows up within a few seconds.
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _reload());
     // Instant push when the admin updates an order status.
-    SupabaseService.instance
-        .watchOrders(onChanged: _reload);
+    SupabaseService.instance.watchOrders(onChanged: _reload);
   }
 
   @override
@@ -3785,8 +4543,7 @@ class _OrderPageState extends State<OrderPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.receipt_long_outlined,
-                  size: 70, color: sch.outline),
+              Icon(Icons.receipt_long_outlined, size: 70, color: sch.outline),
               const SizedBox(height: 12),
               Text(tr('No orders yet'), style: const TextStyle(fontSize: 16)),
             ],
@@ -3841,8 +4598,8 @@ class _OrderPageState extends State<OrderPage> {
                           fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
@@ -3899,22 +4656,23 @@ class _OrderPageState extends State<OrderPage> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(p.thumbnail,
-                            width: 44, height: 44, fit: BoxFit.cover,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) =>
                                 const Icon(Icons.image)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(p.title,
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 14)),
                       ),
                       Text('×${it.quantity}  ',
-                          style:
-                              TextStyle(color: sch.onSurfaceVariant)),
+                          style: TextStyle(color: sch.onSurfaceVariant)),
                       Text('\$$sub',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600)),
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
                     ],
                   ),
                 );
@@ -3955,17 +4713,19 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   /// One stop of the Shipped → Delivered progress tracker.
-  Widget _trackDot(
-      bool reached, bool cancelled, IconData icon, String label, ColorScheme sch) {
+  Widget _trackDot(bool reached, bool cancelled, IconData icon, String label,
+      ColorScheme sch) {
     final color = cancelled
         ? _statusColor('Cancelled')
-        : reached ? _statusColor('Delivered') : sch.outline;
+        : reached
+            ? _statusColor('Delivered')
+            : sch.outline;
     return Column(children: [
       Container(
         width: 34,
         height: 34,
-        decoration:
-            BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
         child: Icon(icon, size: 17, color: color),
       ),
       const SizedBox(height: 4),
@@ -3976,13 +4736,15 @@ class _OrderPageState extends State<OrderPage> {
   Widget _trackLine(bool reached, bool cancelled, ColorScheme sch) {
     final color = cancelled
         ? _statusColor('Cancelled')
-        : reached ? _statusColor('Delivered') : sch.outlineVariant;
+        : reached
+            ? _statusColor('Delivered')
+            : sch.outlineVariant;
     return Expanded(
       child: Container(
         height: 3,
         margin: const EdgeInsets.only(bottom: 18),
-        decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(2)),
+        decoration:
+            BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
       ),
     );
   }
@@ -4054,8 +4816,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
       Navigator.of(context).pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              tr('Could not send feedback. Please try again.'))));
+          content: Text(tr('Could not send feedback. Please try again.'))));
     }
   }
 
@@ -4092,15 +4853,14 @@ class _FeedbackPageState extends State<FeedbackPage> {
                         color: Colors.white)),
                 const SizedBox(height: 4),
                 Text(tr('Help us improve your shopping experience.'),
-                    style: const TextStyle(
-                        fontSize: 13, color: Colors.white70)),
+                    style:
+                        const TextStyle(fontSize: 13, color: Colors.white70)),
               ],
             ),
           ),
           const SizedBox(height: 20),
           Text(tr('Your rating'),
-              style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700)),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Row(children: [
             _star(1, Colors.amber),
@@ -4110,13 +4870,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
             _star(5, Colors.amber),
             const SizedBox(width: 8),
             Text('$_rating/5',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(height: 20),
           Text(tr('Your message'),
-              style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700)),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           TextField(
             controller: _message,

@@ -5,6 +5,15 @@ class User {
   final String firstName, lastName, username, email, phone;
   final String? image, token;
   final bool isAdmin;
+
+  /// `user`, `vendor`, or `admin`. `isAdmin` is retained for existing UI.
+  final String role;
+  bool get isVendor => role == 'vendor';
+
+  /// When the account was registered (from the cloud `created_at` timestamp,
+  /// when the row carries one). Used by the Admin Reports page to compute
+  /// "new users" over a period. Null for local-only accounts.
+  final DateTime? createdAt;
   User(
       {required this.id,
       required this.firstName,
@@ -14,7 +23,9 @@ class User {
       this.phone = '',
       this.image,
       this.token,
-      this.isAdmin = false});
+      this.isAdmin = false,
+      this.role = 'user',
+      this.createdAt});
   String get fullName => '$firstName $lastName'.trim();
   factory User.fromJson(Map<String, dynamic> j) => User(
       id: j['id'] ?? 0,
@@ -25,7 +36,11 @@ class User {
       phone: j['phone'] ?? '',
       image: j['image'],
       token: j['token'],
-      isAdmin: j['isAdmin'] == true || j['isAdmin'] == 'true');
+      isAdmin: j['isAdmin'] == true || j['isAdmin'] == 'true',
+      role: (j['role'] as String?) ??
+          ((j['isAdmin'] == true || j['isAdmin'] == 'true')
+              ? 'admin'
+              : 'user'));
 
   /// Row from the Supabase `app_users` table. The password hash is never
   /// carried on the model (token stays null) so it cannot leak into the
@@ -37,8 +52,12 @@ class User {
       username: j['username'] as String? ?? '',
       email: j['email'] as String? ?? '',
       phone: j['phone'] as String? ?? '',
-      image: (j['image'] as String?)?.isEmpty == true ? null : j['image'] as String?,
-      isAdmin: j['is_admin'] == true);
+      image: (j['image'] as String?)?.isEmpty == true
+          ? null
+          : j['image'] as String?,
+      isAdmin: j['is_admin'] == true,
+      role: j['is_admin'] == true ? 'admin' : (j['role'] as String? ?? 'user'),
+      createdAt: DateTime.tryParse(j['created_at']?.toString() ?? ''));
 }
 
 class Product {
@@ -54,6 +73,12 @@ class Product {
   /// Verified flag managed from the Admin Companies panel. Defaults to
   /// false for older rows without the column.
   final bool verified;
+
+  /// Username that owns this listing. Empty is a legacy/admin listing.
+  final String vendorUsername;
+  /// A vendor-provided bank/KHQR payload. Kept on the listing so checkout can
+  /// render the vendor's real QR without exposing private account details.
+  final String vendorPaymentCode;
   Product(
       {required this.id,
       required this.title,
@@ -67,7 +92,9 @@ class Product {
       required this.thumbnail,
       required this.images,
       this.status = 'Active',
-      this.verified = false});
+      this.verified = false,
+      this.vendorUsername = '',
+      this.vendorPaymentCode = ''});
   factory Product.fromJson(Map<String, dynamic> j) => Product(
       id: j['id'] ?? 0,
       title: j['title'] ?? '',
@@ -81,15 +108,16 @@ class Product {
       thumbnail: j['thumbnail'] ?? '',
       images: List<String>.from(j['images'] ?? const []),
       status: j['status']?.toString() ?? 'Active',
-      verified: j['verified'] == true);
+      verified: j['verified'] == true,
+      vendorUsername: j['vendorUsername']?.toString() ?? '',
+      vendorPaymentCode: j['vendorPaymentCode']?.toString() ?? '');
 
   /// Row from the Supabase `products` table.
   factory Product.fromSupabase(Map<String, dynamic> j) => Product(
       id: (j['id'] as num).toInt(),
       title: j['title'] as String? ?? '',
       price: (j['price'] as num? ?? 0).toDouble(),
-      discountPercentage:
-          (j['discount_percentage'] as num? ?? 0).toDouble(),
+      discountPercentage: (j['discount_percentage'] as num? ?? 0).toDouble(),
       rating: (j['rating'] as num? ?? 0).toDouble(),
       stock: (j['stock'] as num? ?? 0).toInt(),
       brand: j['brand'] as String? ?? '',
@@ -98,7 +126,9 @@ class Product {
       thumbnail: j['thumbnail'] as String? ?? '',
       images: _images(j['images']),
       status: j['status'] as String? ?? 'Active',
-      verified: j['verified'] == true);
+      verified: j['verified'] == true,
+      vendorUsername: j['vendor_username']?.toString() ?? '',
+      vendorPaymentCode: j['vendor_payment_code']?.toString() ?? '');
 
   /// `images` may arrive as a JSON string ('["..."]'), a List, or null.
   static List<String> _images(dynamic raw) {
@@ -233,13 +263,17 @@ class FeedbackItem {
   /// 1..5 star rating chosen by the shopper.
   final int rating;
   final DateTime date;
+
+  /// The reviewed product; null for legacy store-wide feedback.
+  final int? productId;
   FeedbackItem(
       {required this.id,
       required this.owner,
       required this.name,
       required this.message,
       this.rating = 5,
-      DateTime? date})
+      DateTime? date,
+      this.productId})
       : date = date ?? DateTime.now();
 
   /// Row from the Supabase `feedback` table.
@@ -250,7 +284,8 @@ class FeedbackItem {
       message: j['message'] as String? ?? '',
       rating: (j['rating'] as num? ?? 5).toInt(),
       date: DateTime.tryParse(j['created_at']?.toString() ?? '') ??
-          DateTime.now());
+          DateTime.now(),
+      productId: (j['product_id'] as num?)?.toInt());
 
   /// Row from the local offline queue (feedback saved while the cloud was
   /// unreachable). Ids are negative so they never collide with cloud rows.
@@ -261,5 +296,6 @@ class FeedbackItem {
       message: j['message']?.toString() ?? '',
       rating: (j['rating'] as num? ?? 5).toInt(),
       date: DateTime.tryParse(j['created_at']?.toString() ?? '') ??
-          DateTime.now());
+          DateTime.now(),
+      productId: (j['product_id'] as num?)?.toInt());
 }

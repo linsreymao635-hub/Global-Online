@@ -14,6 +14,7 @@ import 'presenters/presenters.dart';
 import 'models/models.dart';
 import 'views/views.dart';
 import 'views/admin_panel.dart';
+import 'views/vendor_panel.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +49,7 @@ class _ShopAppState extends State<ShopApp> {
   // from handlers defined above it (login/signup callbacks).
   final _navKey = GlobalKey<NavigatorState>();
   User? user;
-  bool dark = false;
+  bool dark = AppSettings.darkTheme;
   Locale? locale;
   final cart = CartPresenter(),
       fav = FavoritePresenter(),
@@ -67,6 +68,7 @@ class _ShopAppState extends State<ShopApp> {
     setState(() => user = u);
     _startAccountWatch(u);
     _maybeOpenAdmin(u);
+    _maybeOpenVendor(u);
   }
 
   /// Admins land directly on the admin dashboard (Companies table) instead
@@ -82,7 +84,20 @@ class _ShopAppState extends State<ShopApp> {
               admin: u,
               repo: AdminRepository(widget.products.api),
               orders: orders,
+              dark: dark,
+              setTheme: _setTheme,
+              setLocale: setLocale,
               onLogout: logout)));
+    });
+  }
+
+  void _maybeOpenVendor(User u) {
+    if (!u.isVendor) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _navKey.currentState?.push(MaterialPageRoute(
+          builder: (_) =>
+              VendorPanelPage(vendor: u, repo: VendorRepository(u.username))));
     });
   }
 
@@ -113,6 +128,7 @@ class _ShopAppState extends State<ShopApp> {
       _startAccountWatch(restored);
       // A restored admin session also opens the dashboard right away.
       _maybeOpenAdmin(restored);
+      _maybeOpenVendor(restored);
     }
   }
 
@@ -145,8 +161,7 @@ class _ShopAppState extends State<ShopApp> {
     if (uname.isEmpty || uname == 'guest') return;
     if (!AppSettings.sessionCloudOk) return;
     _watchedUsername = uname;
-    SupabaseService.instance
-        .watchUsers(onDelete: _onAccountDeletedRemotely);
+    SupabaseService.instance.watchUsers(onDelete: _onAccountDeletedRemotely);
     _accountPoll = Timer.periodic(
         const Duration(seconds: 30), (_) => _checkAccountStillExists());
   }
@@ -165,8 +180,7 @@ class _ShopAppState extends State<ShopApp> {
   void _onAccountDeletedRemotely(String username) {
     final u = user;
     if (u == null || u.isAdmin) return;
-    if (username.trim().toLowerCase() !=
-        u.username.trim().toLowerCase()) {
+    if (username.trim().toLowerCase() != u.username.trim().toLowerCase()) {
       return;
     }
     _forceLogoutForDeletedAccount();
@@ -219,6 +233,11 @@ class _ShopAppState extends State<ShopApp> {
     await p.setString('language_code', l.languageCode);
   }
 
+  void _setTheme(bool v) {
+    setState(() => dark = v);
+    AppSettings.saveTheme(v);
+  }
+
   @override
   Widget build(BuildContext c) => MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -233,10 +252,10 @@ class _ShopAppState extends State<ShopApp> {
       ],
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
-      darkTheme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          colorSchemeSeed: Colors.blue),
+      // Same polished dark scheme as the admin panel, so shops, login and
+      // admin all flip to one consistent dark look together.
+      darkTheme:
+          ThemeData(useMaterial3: true, colorScheme: adminDarkColorScheme),
       home: user == null
           ? LoginPage(
               p: LoginPresenter(widget.auth),
@@ -258,6 +277,6 @@ class _ShopAppState extends State<ShopApp> {
               orders: orders,
               logout: logout,
               dark: dark,
-              setTheme: (v) => setState(() => dark = v),
+              setTheme: _setTheme,
               setLocale: setLocale));
 }

@@ -9,6 +9,18 @@ import 'package:supabase/supabase.dart' as sb;
 
 import '../models/models.dart';
 
+/// Result of a cloud `orders` read: the rows plus whether the cloud was
+/// actually reachable. [reachable] lets a caller treat the cloud as the
+/// source of truth for both STATUS and EXISTENCE when online — an order
+/// missing from a successful read was deleted by the admin, so its stale
+/// local copy can be dropped safely. When [reachable] is false (offline /
+/// tests) the caller falls back to its local data instead.
+class OrdersResult {
+  final List<Order> orders;
+  final bool reachable;
+  const OrdersResult(this.orders, this.reachable);
+}
+
 /// Shared cloud backend for the whole app (shoppers AND admin).
 ///
 /// All devices point at the same Supabase project, so every product the
@@ -77,9 +89,7 @@ class SupabaseService {
       if (limit != null) q = q.limit(limit);
       final rows = await q as List;
       _failed = false;
-      return rows
-          .map((e) => (e as Map).cast<String, dynamic>())
-          .toList();
+      return rows.map((e) => (e as Map).cast<String, dynamic>()).toList();
     } catch (_) {
       _failed = true;
       return const [];
@@ -98,16 +108,19 @@ class SupabaseService {
     }
   }
 
-  Future<bool> _update(String table, Map<String, dynamic> row,
-      String pk, Object? pkValue) async {
+  Future<bool> _update(String table, Map<String, dynamic> row, String pk,
+      Object? pkValue) async {
     if (_inFlutterTest) return false;
     try {
       // `.select()` makes PostgREST return the rows that were actually
       // written, so an update that matches NO row (the row only exists on
       // this device — e.g. the cloud table is empty) reports false and the
       // caller falls back to the local store instead of losing the edit.
-      final res =
-          await client.from(table).update(row).eq(pk, pkValue as Object).select();
+      final res = await client
+          .from(table)
+          .update(row)
+          .eq(pk, pkValue as Object)
+          .select();
       _failed = false;
       return (res as List).isNotEmpty;
     } catch (_) {
@@ -150,6 +163,41 @@ class SupabaseService {
     }
   }
 
+  /// Creates the Auth identity first, then an RLS-owned directory profile.
+  /// Email confirmation must be disabled for an instant MVP signup or the UI
+  /// should be extended to ask the customer to verify their email.
+  Future<Map<String, dynamic>?> registerAuthUser(
+      Map<String, dynamic> profile, String password) async {
+    if (_inFlutterTest) return null;
+    try {
+      final response = await client.auth
+          .signUp(email: profile['email'] as String, password: password);
+      final id = response.user?.id;
+      if (id == null) return null;
+      final row = Map<String, dynamic>.from(profile)
+        ..remove('password_hash')
+        ..['auth_user_id'] = id
+        ..['role'] = 'user'
+        ..['is_admin'] = false;
+      final saved = await client.from('app_users').insert(row).select();
+      _failed = false;
+      return (saved as List).isEmpty
+          ? null
+          : (saved.first as Map).cast<String, dynamic>();
+    } catch (_) {
+      _failed = true;
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> currentAuthUserProfile() async {
+    final id = client.auth.currentUser?.id;
+    if (id == null) return null;
+    final rows =
+        await _select('app_users', eqColumn: 'auth_user_id', eqValue: id);
+    return rows.isEmpty ? null : rows.first;
+  }
+
   /// Look up a shop account by username (case-insensitive).
   Future<Map<String, dynamic>?> userByUsername(String username) async {
     final rows = await _select('app_users',
@@ -173,9 +221,7 @@ class SupabaseService {
   Future<bool?> userExists(String username) async {
     if (_inFlutterTest) return null;
     final rows = await _select('app_users',
-        eqColumn: 'username',
-        eqValue: username.trim().toLowerCase(),
-        limit: 1);
+        eqColumn: 'username', eqValue: username.trim().toLowerCase(), limit: 1);
     if (_failed) return null; // could not reach the cloud — answer unknown
     return rows.isNotEmpty;
   }
@@ -194,16 +240,33 @@ class SupabaseService {
   /// Promote/demote an account's role in the shared cloud directory
   /// (is_admin toggle used by the Administration page). Returns true when
   /// the cloud accepted the change.
-  Future<bool> updateUserRole(String username, bool isAdmin) =>
-      _update('app_users', {'is_admin': isAdmin}, 'username',
-          username.trim().toLowerCase());
+  Future<bool> updateUserRole(String username, bool isAdmin) => _update(
+      'app_users',
+      {'is_admin': isAdmin},
+      'username',
+      username.trim().toLowerCase());
+
+  Future<bool> updateUserVendorRole(String username, bool isVendor) => _update(
+      'app_users',
+      {'role': isVendor ? 'vendor' : 'user'},
+      'username',
+      username.trim().toLowerCase());
 
   // --------------------------------------------------------------- products
 
   Future<List<Product>> products() async {
     // Newest first — items the admin just added always land on top.
+    final rows =
+        await _select('products', orderBy: 'created_at', ascending: false);
+    return rows.map(Product.fromSupabase).toList();
+  }
+
+  Future<List<Product>> vendorProducts(String username) async {
     final rows = await _select('products',
-        orderBy: 'created_at', ascending: false);
+        eqColumn: 'vendor_username',
+        eqValue: username.trim().toLowerCase(),
+        orderBy: 'created_at',
+        ascending: false);
     return rows.map(Product.fromSupabase).toList();
   }
 
@@ -215,8 +278,7 @@ class SupabaseService {
   Future<Map<String, dynamic>?> addProductRow(Product p) async {
     var row = await _insertReturning(
         'products', productRow(p, newLocalId: true, withVerified: true));
-    row ??=
-        await _insertReturning('products', productRow(p, newLocalId: true));
+    row ??= await _insertReturning('products', productRow(p, newLocalId: true));
     return row;
   }
 
@@ -229,9 +291,7 @@ class SupabaseService {
       final res = await client.from(table).insert(row).select();
       _failed = false;
       final list = res as List;
-      return list.isEmpty
-          ? null
-          : (list.first as Map).cast<String, dynamic>();
+      return list.isEmpty ? null : (list.first as Map).cast<String, dynamic>();
     } catch (_) {
       _failed = true;
       return null;
@@ -249,6 +309,41 @@ class SupabaseService {
 
   Future<bool> deleteProduct(int id) => _delete('products', 'id', id);
 
+  /// Owner predicate is defense in depth; database RLS is authoritative.
+  Future<bool> updateVendorProduct(String vendor, Product p) async {
+    if (_inFlutterTest) return false;
+    try {
+      final res = await client
+          .from('products')
+          .update(productRow(p, withVerified: false))
+          .eq('id', p.id)
+          .eq('vendor_username', vendor.trim().toLowerCase())
+          .select();
+      _failed = false;
+      return (res as List).isNotEmpty;
+    } catch (_) {
+      _failed = true;
+      return false;
+    }
+  }
+
+  Future<bool> deleteVendorProduct(String vendor, int id) async {
+    if (_inFlutterTest) return false;
+    try {
+      final res = await client
+          .from('products')
+          .delete()
+          .eq('id', id)
+          .eq('vendor_username', vendor.trim().toLowerCase())
+          .select();
+      _failed = false;
+      return (res as List).isNotEmpty;
+    } catch (_) {
+      _failed = true;
+      return false;
+    }
+  }
+
   static Map<String, dynamic> productRow(Product p,
       {bool newLocalId = false, bool withVerified = true}) {
     String imgList(List<String> l) => jsonEncode(l);
@@ -264,6 +359,8 @@ class SupabaseService {
       'thumbnail': p.thumbnail,
       'images': imgList(p.images),
       'status': p.status,
+      'vendor_username': p.vendorUsername.trim().toLowerCase(),
+      'vendor_payment_code': p.vendorPaymentCode.trim(),
       if (withVerified) 'verified': p.verified,
     };
     if (!newLocalId) row['id'] = p.id;
@@ -274,15 +371,13 @@ class SupabaseService {
 
   Future<List<Category>> categories() async {
     // Newest first — freshly added categories appear before older ones.
-    final rows = await _select('categories',
-        orderBy: 'created_at', ascending: false);
+    final rows =
+        await _select('categories', orderBy: 'created_at', ascending: false);
     return rows.map(Category.fromSupabase).toList();
   }
 
   Future<bool> addCategory(String name,
-      {String slug = '',
-      String description = '',
-      String image = ''}) async {
+      {String slug = '', String description = '', String image = ''}) async {
     final label = name.trim();
     if (label.isEmpty) return false;
     final custom = slug.trim().toLowerCase();
@@ -357,14 +452,35 @@ class SupabaseService {
   /// Order History so each user only ever sees their own — changing one
   /// user's order in the admin panel can never touch another user's).
   /// Empty/null returns every order (admin panel).
-  Future<List<Order>> orders({String? owner}) async {
-    final rows = await _select('orders',
-        eqColumn:
-            (owner != null && owner.isNotEmpty) ? 'owner' : null,
-        eqValue: owner,
-        orderBy: 'created_at',
-        ascending: false);
+  Future<List<Order>> orders({String? owner}) async =>
+      (await ordersResult(owner: owner)).orders;
+
+  /// RLS-backed view of only orders containing this vendor's products.
+  Future<List<Order>> vendorOrders() async {
+    final rows =
+        await _select('vendor_orders', orderBy: 'created_at', ascending: false);
     return rows.map(Order.fromSupabase).toList();
+  }
+
+  /// Same as [orders] but also reports whether the cloud read succeeded.
+  Future<OrdersResult> ordersResult({String? owner}) async {
+    if (_inFlutterTest) return const OrdersResult([], false);
+    try {
+      dynamic q = client.from('orders').select();
+      if (owner != null && owner.isNotEmpty) q = q.eq('owner', owner);
+      q = q.order('created_at', ascending: false);
+      final rows = await q as List;
+      _failed = false;
+      return OrdersResult(
+          rows
+              .map(
+                  (e) => Order.fromSupabase((e as Map).cast<String, dynamic>()))
+              .toList(),
+          true);
+    } catch (_) {
+      _failed = true;
+      return const OrdersResult([], false);
+    }
   }
 
   Future<bool> saveOrder(Order o) => _insert('orders', {
@@ -388,13 +504,28 @@ class SupabaseService {
                     'description': it.product.description,
                     'thumbnail': it.product.thumbnail,
                     'images': it.product.images,
+                    'vendorUsername': it.product.vendorUsername,
+                    'vendorPaymentCode': it.product.vendorPaymentCode,
                   }
                 })
             .toList()),
       });
 
-  Future<bool> updateOrderStatus(String id, String status) =>
-      _update('orders', {'status': status}, 'id', id);
+  static const orderStatuses = {
+    'Processing',
+    'Shipped',
+    'Delivered',
+    'Cancelled',
+  };
+
+  /// A confirmed PostgREST update (`.select()` in [_update]) is required
+  /// before the caller tells either UI that the new status was saved.
+  Future<bool> updateOrderStatus(String id, String status) {
+    if (!orderStatuses.contains(status) || id.trim().isEmpty) {
+      return Future.value(false);
+    }
+    return _update('orders', {'status': status}, 'id', id);
+  }
 
   // ------------------------------------------------------------- feedback
 
@@ -419,9 +550,7 @@ class SupabaseService {
     final list = _pendingFeedback(p);
     // Give the queued item a fresh unique negative id (cloud rows use
     // positive ids from the identity column).
-    final lowest = list
-        .map((x) => x.id)
-        .fold(0, (a, b) => b < a ? b : a);
+    final lowest = list.map((x) => x.id).fold(0, (a, b) => b < a ? b : a);
     final queued = FeedbackItem(
         id: lowest - 1,
         owner: f.owner,
@@ -440,6 +569,7 @@ class SupabaseService {
         'name': f.name,
         'message': f.message,
         'rating': f.rating,
+        if (f.productId != null) 'product_id': f.productId,
         'created_at': f.date.toIso8601String(),
       });
 
@@ -464,12 +594,11 @@ class SupabaseService {
       uploaded.add(f.id);
     }
     if (uploaded.isEmpty) return const [];
-    final remaining =
-        pending.where((x) => !uploaded.contains(x.id)).toList();
+    final remaining = pending.where((x) => !uploaded.contains(x.id)).toList();
     await p.setStringList(
         _pendingFeedbackKey, remaining.map(jsonEncodeFeedback).toList());
     return uploaded;
-    }
+  }
 
   /// Save feedback to the cloud. If the cloud is unreachable (e.g. the
   /// `feedback` table has not been created yet), the item is queued
@@ -481,6 +610,7 @@ class SupabaseService {
       'name': f.name,
       'message': f.message,
       'rating': f.rating,
+      if (f.productId != null) 'product_id': f.productId,
     });
     if (ok) {
       // A previous offline message may still be queued — flush it now.
@@ -504,8 +634,8 @@ class SupabaseService {
     // Retry any queued offline messages first — if the cloud is back,
     // they upload and this same call picks them up from the cloud.
     await flushPendingFeedback();
-    final rows = await _select('feedback',
-        orderBy: 'created_at', ascending: false);
+    final rows =
+        await _select('feedback', orderBy: 'created_at', ascending: false);
     final pending = _pendingFeedback(p);
     if (rows.isEmpty && pending.isEmpty) return const [];
     final cloud = rows.map(FeedbackItem.fromSupabase).toList();
@@ -513,17 +643,22 @@ class SupabaseService {
     final merged = [
       ...pending.where((x) => !seen.contains('${x.owner}|${x.message}')),
       ...cloud,
-    ]
-      ..sort((a, b) => b.date.compareTo(a.date));
+    ]..sort((a, b) => b.date.compareTo(a.date));
     return merged;
+  }
+
+  /// Security-invoker view installed by the vendor migration.
+  Future<List<FeedbackItem>> vendorFeedbacks() async {
+    final rows = await _select('vendor_feedback',
+        orderBy: 'created_at', ascending: false);
+    return rows.map(FeedbackItem.fromSupabase).toList();
   }
 
   Future<bool> deleteFeedback(int id) async {
     if (id < 0) {
       // A queued offline item: remove it from the local queue.
       final p = await SharedPreferences.getInstance();
-      final remaining =
-          _pendingFeedback(p).where((x) => x.id != id).toList();
+      final remaining = _pendingFeedback(p).where((x) => x.id != id).toList();
       await p.setStringList(
           _pendingFeedbackKey, remaining.map(jsonEncodeFeedback).toList());
       return true;
@@ -635,6 +770,14 @@ class SupabaseService {
 
   sb.RealtimeChannel? _ordersChannel;
 
+  // Every screen that cares about live order changes (the admin Orders page
+  // and the shopper Order History) registers its own handler. The watcher is
+  // ADDITIVE: registering a second watcher adds a handler to the SAME channel
+  // instead of tearing the first subscription down, so one screen can never
+  // silently stop another screen's live updates.
+  final List<void Function()> _ordersInsertHandlers = [];
+  final List<void Function()> _ordersChangeHandlers = [];
+
   /// Listen for live changes to the `orders` table.
   ///
   /// [onInsert] fires the moment a NEW order row appears (a shopper just
@@ -646,41 +789,72 @@ class SupabaseService {
   /// shopper's Order History reflects it the moment it happens — no
   /// pull-to-refresh, no re-login.
   ///
+  /// Multiple callers may watch at the same time; every registered callback
+  /// is kept and all of them listen to the same channel.
+  ///
   /// Needs the `orders` table added to the `supabase_realtime` publication
   /// (see supabase_schema.sql); if realtime is not enabled the polling
   /// fallbacks in the Order History page and the admin panel still keep
   /// everything fresh.
   void watchOrders({void Function()? onInsert, void Function()? onChanged}) {
     if (_inFlutterTest) return;
+    if (onInsert != null && !_ordersInsertHandlers.contains(onInsert)) {
+      _ordersInsertHandlers.add(onInsert);
+    }
+    if (onChanged != null && !_ordersChangeHandlers.contains(onChanged)) {
+      _ordersChangeHandlers.add(onChanged);
+    }
+    if (_ordersChannel != null) return; // already subscribed — just added
     try {
-      cancelOrdersWatch();
       var ch = client.channel('orders-live');
-      if (onInsert != null) {
-        ch = ch.onPostgresChanges(
-          event: sb.PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'orders',
-          callback: (_) => onInsert(),
-        );
-      }
-      if (onChanged != null) {
-        ch = ch.onPostgresChanges(
-          event: sb.PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'orders',
-          callback: (_) => onChanged(),
-        );
-      }
+      ch = ch.onPostgresChanges(
+        event: sb.PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'orders',
+        callback: (_) {
+          for (final h in List.of(_ordersInsertHandlers)) {
+            h();
+          }
+        },
+      );
+      ch = ch.onPostgresChanges(
+        event: sb.PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'orders',
+        callback: (_) {
+          for (final h in List.of(_ordersChangeHandlers)) {
+            h();
+          }
+        },
+      );
+      // A deletion must refresh the shopper page as well. The next
+      // cloud-authoritative merge removes the cached synced copy, so a user
+      // does not keep seeing an order that the admin removed.
+      ch = ch.onPostgresChanges(
+        event: sb.PostgresChangeEvent.delete,
+        schema: 'public',
+        table: 'orders',
+        callback: (_) {
+          for (final h in List.of(_ordersChangeHandlers)) {
+            h();
+          }
+        },
+      );
       _ordersChannel = ch.subscribe();
     } catch (_) {
       // Realtime unavailable (offline / not enabled) — the polling
       // fallbacks in the Order History page and the admin panel cover it.
       _ordersChannel = null;
+      _ordersInsertHandlers.clear();
+      _ordersChangeHandlers.clear();
     }
   }
 
-  /// Stop listening for live order changes.
+  /// Stop listening for live order changes (called when the screens that
+  /// registered watchers close).
   void cancelOrdersWatch() {
+    _ordersInsertHandlers.clear();
+    _ordersChangeHandlers.clear();
     final ch = _ordersChannel;
     _ordersChannel = null;
     if (ch == null) return;

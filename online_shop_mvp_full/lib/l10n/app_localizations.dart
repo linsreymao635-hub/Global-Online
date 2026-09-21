@@ -28,6 +28,101 @@ class AppLocalizations {
   String productDescription(int id, String en) =>
       isKhmer ? (_descKm[id] ?? en) : en;
 
+  String feedbackMessage(String en) {
+    if (!isKhmer) return en;
+    // 1) Exact match (also trimmed — some rows keep stray spaces).
+    final direct = _feedbackKm[en] ?? _feedbackKm[en.trim()];
+    if (direct != null) return direct;
+    // 2) Normalized match: ignores case, punctuation and apostrophe style so
+    //    "Good website.", "IT'S DIFFICULT FOR ME" etc. still translate.
+    final hit = _feedbackKmNorm[_normFeedback(en)];
+    if (hit != null) return hit;
+    // 3) Word-by-word fallback for short loose phrases — only used when EVERY
+    //    word is known, so real free-text feedback stays untouched.
+    final words =
+        _normFeedback(en).split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.isNotEmpty && words.every((w) => _feedbackWord(w) != null)) {
+      final km = words
+          .map((w) => _feedbackWord(w)!)
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+      if (km.isNotEmpty) return km;
+    }
+    return en;
+  }
+
+  /// Lowercase, drop apostrophes and punctuation, collapse spaces.
+  static String _normFeedback(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp('[’‘ʼ`]'), '')
+      .replaceAll(RegExp('[^a-z0-9 ]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  /// Same translations keyed by the normalized form (built once).
+  static final Map<String, String> _feedbackKmNorm = {
+    for (final e in _feedbackKm.entries) _normFeedback(e.key): e.value,
+  };
+
+  /// One-word Khmer lookup used by the fallback above. An empty value means a
+  /// filler word (the/is/...) that is simply dropped. Handles simple plurals.
+  static const Map<String, String> _feedbackWordKm = {
+    'it': 'វា',
+    'its': 'វា',
+    'this': 'នេះ',
+    'i': 'ខ្ញុំ',
+    'me': 'ខ្ញុំ',
+    'my': 'ខ្ញុំ',
+    'you': 'អ្នក',
+    'the': '',
+    'a': '',
+    'an': '',
+    'is': '',
+    'are': '',
+    'was': '',
+    'were': '',
+    'am': '',
+    'to': '',
+    'of': '',
+    'and': 'និង',
+    'for': 'សម្រាប់',
+    'not': 'មិន',
+    'good': 'ល្អ',
+    'great': 'ល្អណាស់',
+    'nice': 'ល្អ',
+    'excellent': 'ល្អណាស់',
+    'bad': 'អន់',
+    'poor': 'អន់',
+    'love': 'ស្រលាញ់',
+    'like': 'ចូលចិត្ត',
+    'app': 'កម្មវិធី',
+    'website': 'គេហទំព័រ',
+    'product': 'ផលិតផល',
+    'price': 'តម្លៃ',
+    'quality': 'គុណភាព',
+    'service': 'សេវាកម្ម',
+    'delivery': 'ការដឹកជញ្ជូន',
+    'fast': 'លឿន',
+    'quick': 'លឿន',
+    'slow': 'យឺត',
+    'easy': 'ងាយស្រួល',
+    'use': 'ប្រើ',
+    'difficult': 'ពិបាក',
+    'hard': 'ពិបាក',
+    'thank': 'អរគុណ',
+    'thanks': 'អរគុណ',
+    'recommended': 'ណែនាំ',
+    'high': 'ខ្ពស់',
+    'helpful': 'មានប្រយោជន៍',
+  };
+
+  static String? _feedbackWord(String w) {
+    var hit = _feedbackWordKm[w];
+    if (hit != null) return hit;
+    if (w.endsWith('s')) hit = _feedbackWordKm[w.substring(0, w.length - 1)];
+    return hit;
+  }
+
   String discountLine(String pct, String save) => isKhmer
       ? 'បញ្ចុះតម្លៃ $pct% • សន្សំ \$$save'
       : 'Discount $pct% • Save \$$save';
@@ -231,6 +326,18 @@ class AppLocalizations {
     'Verification code': 'កូដផ្ទៀងផ្ទាត់',
     'We sent a code to': 'យើងបានផ្ញើកូដទៅ',
     'Verify code': 'ផ្ទៀងផ្ទាត់កូដ',
+    'Enter your phone number': 'បញ្ចូលលេខទូរស័ព្ទរបស់អ្នក',
+    'We will text you a 6-digit code to verify it is you.':
+        'យើងនឹងផ្ញើកូដ 6 ខ្ទង់ទៅអ្នកដើម្បីផ្ទៀងផ្ទាត់អត្តសញ្ញាណរបស់អ្នក',
+    'Code': 'កូដ',
+    'Type the 6-digit code from the message.':
+        'វាយកូដ 6 ខ្ទង់ពីសាររបស់អ្នក',
+    'Resend code': 'ផ្ញើកូដម្តងទៀត',
+    'Set a new password': 'កំណត់ពាក្យសម្ងាត់ថ្មី',
+    'Choose a new password that is at least 6 characters long.':
+        'ជ្រើសរើសពាក្យសម្ងាត់ថ្មីដែលយ៉ាងហោចណាស់ 6 តួអក្សរ',
+    'Show password': 'បង្ហាញពាក្យសម្ងាត់',
+    'Hide password': 'លាក់ពាក្យសម្ងាត់',
     'Please enter a valid phone number':
         'សូមបញ្ចូលលេខទូរស័ព្ទត្រឹមត្រូវ',
     'Wrong code. Check your phone.': 'កូដមិនត្រឹមត្រូវ។ សូមពិនិត្យមើលទូរស័ព្ទរបស់អ្នក',
@@ -314,6 +421,13 @@ class AppLocalizations {
     'Dark mode': 'របៀបងងឹត',
     'Theme': 'របៀប',
     'Notifications': 'ការជូនដំណឹង',
+    'Payments': 'ការទូទាត់',
+    'Security': 'សុវត្ថិភាព',
+    'Overview': 'ទិដ្ឋភាពទូទៅ',
+    'Admin Users': 'អ្នកប្រើប្រាស់អ្នកគ្រប់គ្រង',
+    'Roles & Permissions': 'តួនាទី និងសិទ្ធិ',
+    'Activity Logs': 'កំណត់ហេតុសកម្មភាព',
+    'System Management': 'ការគ្រប់គ្រងប្រព័ន្ធ',
     'Receive discount alerts': 'ទទួលការជូនដំណឹងបញ្ចុះតម្លៃ',
     'Notifications are off. Turn them on in Settings.':
         'ការជូនដំណឹងត្រូវបានបិទ។ សូមបើកវានៅក្នុងការកំណត់។',
@@ -542,6 +656,14 @@ class AppLocalizations {
     'This page is coming soon': 'ទំព័រនេះនឹងមកដល់ឆាប់ៗ',
     'Refresh data': 'ផ្ទុកទិន្នន័យឡើងវិញ',
     'Super Admin': 'អ្នកគ្រប់គ្រងជាន់ខ្ពស់',
+    'Super Admin always has every permission.':
+        'អ្នកគ្រប់គ្រងជាន់ខ្ពស់តែងតែមានការអនុញ្ញាតគ្រប់យ៉ាង',
+    'The Super Admin role cannot be deleted.':
+        'មិនអាចលុបតួនាទីអ្នកគ្រប់គ្រងជាន់ខ្ពស់បានទេ',
+    'The Super Admin role is fixed and cannot be edited.':
+        'តួនាទីអ្នកគ្រប់គ្រងជាន់ខ្ពស់គឺថេរ ហើយមិនអាចកែប្រែបានទេ',
+    'Super Admin is the top role: it always holds every permission and cannot be deleted or edited.':
+        'អ្នកគ្រប់គ្រងជាន់ខ្ពស់គឺជាតួនាទីកំពូល៖ វាតែងតែមានការអនុញ្ញាតគ្រប់យ៉ាង ហើយមិនអាចលុប ឬកែប្រែបានទេ',
     'User ID': 'លេខសម្គាល់អ្នកប្រើ',
     'Best prices & daily deals': 'តម្លៃល្អបំផុត និងបញ្ចុះតម្លៃរាល់ថ្ងៃ',
     'Fast delivery to your door': 'ការដឹកជញ្ជូនលឿនដល់ផ្ទះ',
@@ -564,7 +686,118 @@ class AppLocalizations {
     'Verified': 'បានផ្ទៀងផ្ទាត់',
     'Unverified': 'មិនទាន់ផ្ទៀងផ្ទាត់',
     'Active': 'សកម្ម',
+    // Admin Settings page
+    'Payment Settings': 'ការកំណត់ទូទាត់',
+    'Currency Symbol': 'និមិត្តសញ្ញាប្រាក់',
+    'Tax Rate (%)': 'អត្រាពន្ធ (%)',
+    'Payment Methods': 'វិធីទូទាត់',
+    'Currency': 'រូបិយប័ណ្ណ',
+    'Select the checkout options available to shoppers.':
+        'ជ្រើសរើសជម្រើសទូទាត់នៅពេលអតិថិជនបញ្ចូលទំនិញ។',
+    'At least one method is recommended so shoppers can pay.':
+        'គួរធ្វើឱ្យមានវិធីទូទាត់យ៉ាងហោចណាស់មួយ ដើម្បីឱ្យអតិថិជនអាចទូទាត់បាន។',
+    'Customers pay the courier in cash.':
+        'អតិថិជនបង់ប្រាក់ជូនអ្នកដឹកជញ្ជូនជាសាច់ប្រាក់។',
+    'Visa, Mastercard and debit cards.': 'Visa, Mastercard និងកាត់ដេប៊ីត។',
+    'ABA, Wing and other bank apps.': 'ABA, Wing និងកម្មវិធីធនាគារផ្សេងៗ។',
+    'KHQR scan-to-pay at checkout.': 'ស្កេន KHQR ដើម្បីទូទាត់នៅពេលទូទាត់។',
+    'Custom payment option.': 'ជម្រើសទូទាត់ផ្ទាល់ខ្លួន។',
+    'Currency, tax and which payment methods shoppers can use.':
+        'រូបិយប័ណ្ណ ពន្ធ និងវិធីទូទាត់ដែលអតិថិជនអាចប្រើ។',
+    'Saved': 'បានរក្សាទុក',
+    'Which shop events send you a notification.':
+        'ព្រឹត្តិការណ៍ណាដែលផ្ញើការជូនដំណឹងមកអ្នក។',
+    'Notification Preferences': 'ចំណងជើងការជូនដំណឹង',
+    'New order notifications': 'ការជូនដំណឹងពេលមានការបញ្ជាទិញថ្មី',
+    'Get an alert the moment a shopper places an order.':
+        'ទទួលការជូនដំណឹងភ្លាមៗពេលអតិថិជនបញ្ជាទិញ។',
+    'Email notifications': 'ការជូនដំណឹងតាមអ៊ីមែល',
+    'Receive order summaries by email.': 'ទទួលសេចក្តីសង្ខេបការបញ្ជាទិញតាមអ៊ីមែល។',
+    'Language changed': 'បានផ្លាស់ប្តូរភាសា',
+    'Choose the language for the whole shop app.':
+        'ជ្រើសរើសភាសាសម្រាប់កម្មវិធីទាំងមូល។',
+    'Keep the admin account safe.': 'ការពារគណនីអ្នកគ្រប់គ្រងឱ្យមានសុវត្ថិភាព។',
+    'Confirm New Password': 'បញ្ជាក់ពាក្យសម្ងាត់ថ្មី',
+    'Two-Factor Authentication': 'ការផ្ទៀងផ្ទាត់ពីរជំហាន',
+    'Require a 6-digit code on login': 'ទាមទារកូដ ៦ តួនៅពេលចូល',
+    'A code generator can be connected here in a future release.':
+        'អ្នកបង្កើតកូដអាចតភ្ជាប់នៅទីនេះនៅក្នុងកំណែបន្ទាប់។',
+    'Login Sessions': 'សេសម័នចូលប្រើ',
+    'This device': 'ឧបករណ៍នេះ',
+    'Current session': 'សេសម័នបច្ចុប្បន្ន',
+    'Sessions on other devices appear here after signing in.':
+        'សេសម័នលើឧបករណ៍ផ្សេងនឹងបង្ហាញនៅទីនេះបន្ទាប់ពីចូលប្រើ។',
     'Search shops...': 'ស្វែងរកហាង...',
+    // Admin tables & dialogs
+    'No records found': 'រកមិនឃើញទិន្នន័យ',
+    'URL': 'តំណភ្ជាប់',
+    'Role': 'តួនាទី',
+    'items': 'មុខ',
+    'Showing 0-0 of 0': 'បង្ហាញ 0-0 ក្នុងចំណោម 0',
+    'e.g. Acme Corp': 'ឧ. Acme Corp',
+    'Sales Overview': 'ទិដ្ឋភាពទូទៅនៃការលក់',
+    'Product Performance': 'ដំណើរការផលិតផល',
+    'No low stock right now': 'បច្ចុប្បន្នគ្មានផលិតផលស្តុកតិចទេ',
+    'Customer Statistics': 'ស្ថិតិអតិថិជន',
+    'New user counts reflect accounts registered after this update.':
+        'ចំនួនអ្នកប្រើថ្មីគិតតែគណនីដែលបានចុះឈ្មោះបន្ទាប់ពីធ្វើបច្ចុប្បន្នភាពនេះ។',
+    'Other': 'ផ្សេងៗ',
+    'Add admin / staff': 'បន្ថែមអ្នកគ្រប់គ្រង / បុគ្គលិក',
+    'Admins & Staff': 'អ្នកគ្រប់គ្រង & បុគ្គលិក',
+    'Regular Users': 'អ្នកប្រើប្រាស់ធម្មតា',
+    'No admin users yet — promote a user with the button above.':
+        'មិនទាន់មានអ្នកគ្រប់គ្រងទេ — ប្រើប៊ូតុងខាងលើដើម្បីបន្ទុកតួនាទីអ្នកប្រើ។',
+    'Remove admin': 'ដកតួនាទីអ្នកគ្រប់គ្រង',
+    'Make admin': 'បង្កើតជាអ្នកគ្រប់គ្រង',
+    'Account created': 'គណនីត្រូវបានបង្កើត',
+    'Username is required': 'ត្រូវការឈ្មោះអ្នកប្រើ',
+    'Grant admin role?': 'ផ្តល់តួនាទីអ្នកគ្រប់គ្រង?',
+    'Admin accounts can manage the whole shop from this panel. The built-in @admin account is always Super Admin.':
+        'គណនីអ្នកគ្រប់គ្រងអាចគ្រប់គ្រងហាងទាំងមូលពីផ្ទាំងនេះ។ គណនី @admin គឺជាអ្នកគ្រប់គ្រងជាន់ខ្ពស់ជានិច្ច។',
+    'Delete role "x"?': 'លុបតួនាទី "x"?',
+    'This removes the role and its permission mapping. Accounts keep their current access.':
+        'ការនេះលុបតួនាទីនិងការចាត់តាំងសិទ្ធិរបស់វា។ គណនីនៅតែរក្សាសិទ្ធិបច្ចុប្បន្ន។',
+    'Edit role': 'កែសម្រួលតួនាទី',
+    'Create role': 'បង្កើតតួនាទី',
+    'Role name': 'ឈ្មោះតួនាទី',
+    'PERMISSIONS': 'សិទ្ធិ',
+    'NAME': 'ឈ្មោះ',
+    'DESCRIPTION': 'ការពិពណ៌នា',
+    'ACTIONS': 'សកម្មភាព',
+    'No permissions yet — add one below.': 'មិនទាន់មានសិទ្ធិទេ — បន្ថែមខាងក្រោម។',
+    'Add custom permission': 'បន្ថែមសិទ្ធិថ្មី',
+    'Add permission': 'បន្ថែមសិទ្ធិ',
+    'Role name is required.': 'ត្រូវការឈ្មោះតួនាទី។',
+    'No permissions — tap Edit to add some.': 'គ្មានសិទ្ធិ — ចុច កែសម្រួល ដើម្បីបន្ថែម។',
+    'Tap to deny: x': 'ចុចដើម្បីហាមឃាត់៖ x',
+    'Tap to allow: x': 'ចុចដើម្បីអនុញ្ញាត៖ x',
+    'Edit role tooltip': 'កែសម្រួលតួនាទី',
+    'Delete role': 'លុបតួនាទី',
+    'Configure user roles and map dynamic system-wide access permissions. Tap a permission chip to allow or deny it for that role.':
+        'កំណត់តួនាទីអ្នកប្រើនិងចាត់តាំងសិទ្ធិទូទាំងប្រព័ន្ធ។ ចុចលើស្លាកសិទ្ធិដើម្បីអនុញ្ញាតិឬហាមឃាត់សម្រាប់តួនាទីនោះ។',
+    'No roles yet — create the first one.': 'មិនទាន់មានតួនាទីទេ — បង្កើតតួនាទីដំបូង។',
+    'Role enforcement is applied by the backend admin checks. Accounts with is_admin = true are treated as Admin+.':
+        'ការអនុវត្តតួនាទីធ្វើដោយការពិនិត្យរបស់ backend។ គណនីដែលមាន is_admin = true ត្រូវបានចាត់ទុកជា Admin+។',
+    'Actions you take in this panel (edits, deletes, status changes, role updates) are recorded here.':
+        'សកម្មភាពដែលអ្នកធ្វើក្នុងផ្ទាំងនេះ (កែសម្រួល លុប ប្តូរស្ថានភាព ធ្វើបច្ចុប្បន្នភាពតួនាទី) ត្រូវបានកត់ត្រានៅទីនេះ។',
+    'Refresh': 'ផ្ទុកឡើងវិញ',
+    'Clear all logs?': 'ជម្រះកំណត់ហេតុទាំងអស់?',
+    'Clear all': 'ជម្រះទាំងអស់',
+    'No activity recorded yet': 'មិនទាន់មានសកម្មភាពកត់ត្រាទេ',
+    'Database Status': 'ស្ថានភាពមូលដ្ឋានទិន្នន័យ',
+    'Connected to the shared cloud': 'បានតភ្ជាប់ទៅពពករួម',
+    'Database unreachable': 'មិនអាចទៅដល់មូលដ្ឋានទិន្នន័យ',
+    'Check now': 'ពិនិត្យឥឡូវនេះ',
+    'Database': 'មូលដ្ឋានទិន្នន័យ',
+    'Endpoint': 'ចំណុចតភ្ជាប់',
+    'Product catalog': 'កាតាឡុកផលិតផល',
+    'Application Info': 'ព័ត៌មានកម្មវិធី',
+    'Global Online Admin': 'Global Online Admin',
+    'Admin account': 'គណនីអ្នកគ្រប់គ្រង',
+    'Data source': 'ប្រភពទិន្នន័យ',
+    'Cloud + local device cache': 'ពពក + ឃ្លាំងសម្ងាត់ឧបករណ៍ក្នុងស្រុក',
+    'Realtime': 'Realtime',
+    'Orders, Users & Feedback watchers active': 'ការតាមដានការបញ្ជាទិញ អ្នកប្រើ និងមតិយោបល់កំពុងដំណើរការ',
     'Search categories...': 'ស្វែងរកប្រភេទ...',
     'Search products...': 'ស្វែងរកផលិតផល...',
     'Search users...': 'ស្វែងរកអ្នកប្រើប្រាស់...',
@@ -663,6 +896,9 @@ class AppLocalizations {
     'Customer': 'អតិថិជន',
     'Update status': 'ធ្វើបច្ចុប្បន្នភាពស្ថានភាព',
     'Order status updated': 'ស្ថានភាពការបញ្ជាទិញត្រូវបានអាប់ដេត',
+    'Order deleted': 'បានលុបការបញ្ជាទិញ',
+    'Delete Order': 'លុបការបញ្ជាទិញ',
+    'Could not reach the cloud. Order not deleted.': 'មិនអាចភ្ជាប់ទៅ Cloud បានទេ។ ការបញ្ជាទិញមិនត្រូវបានលុបទេ។',
     'Guest': 'ភ្ញៀវ',
     'No users yet': 'មិនទាន់មានអ្នកប្រើប្រាស់ទេ',
     'No categories yet': 'មិនទាន់មានប្រភេទទេ',
@@ -750,6 +986,62 @@ class AppLocalizations {
     76: 'Rolling Pin ឈើ ឧបករណ៍បុរាណ សម្រាប់រាស់ម្សៅដុតនំ ផ្ទៃរលោង ចំណុចទាញរឹងមាំ ងាយស្រួលឲ្យកម្រាស់ស្មើ។',
     77: 'Peeler លឿង ឧបករណ៍ងាយស្រួល សម្រាប់បកសំបកផ្លែឈើ និងបន្លែ ពណ៌លឿងភ្លឺបន្ថែមភាពស្រស់ថ្លាដល់ផ្ទះបាយ។',
     };
+
+  /// Khmer translations for common feedback messages shoppers write. Messages
+  /// not present in this list are shown in their original language.
+  static const Map<String, String> _feedbackKm = {
+    "It's difficult for me": 'វាពិបាកសម្រាប់ខ្ញុំ',
+    'It’s difficult for me': 'វាពិបាកសម្រាប់ខ្ញុំ',
+    'It is difficult for me': 'វាពិបាកសម្រាប់ខ្ញុំ',
+    'The app is great': 'កម្មវិធីល្អណាស់',
+    "I love this app": 'ខ្ញុំស្រលាញ់កម្មវិធីនេះ',
+    'Love it': 'ចូលចិត្តណាស់',
+    'Very good': 'ល្អណាស់',
+    'Good': 'ល្អ',
+    'Great products': 'ផលិតផលល្អណាស់',
+    'Good quality': 'គុណភាពល្អ',
+    'Great quality': 'គុណភាពល្អណាស់',
+    'Fast delivery': 'ការដឹកជញ្ជូនលឿន',
+    'Delivery was fast': 'ការដឹកជញ្ជូនលឿន',
+    'Delivery is slow': 'ការដឹកជញ្ជូនយឺត',
+    'Delivery took too long': 'ការដឹកជញ្ជូនយឺតពេក',
+    'Excellent service': 'សេវាកម្មល្អឥតខ្ចោះ',
+    'Great service': 'សេវាកម្មល្អ',
+    'Good service': 'សេវាកម្មល្អ',
+    'Very helpful': 'ជួយបានល្អណាស់',
+    'Easy to use': 'ងាយស្រួលប្រើ',
+    'Good prices': 'តម្លៃល្អ',
+    'Prices are high': 'តម្លៃថ្លៃពេក',
+    'Poor quality': 'គុណភាពអន់',
+    'Not good': 'មិនល្អ',
+    'Bad customer service': 'សេវាកម្មអតិថិជនមិនល្អ',
+    'Highly recommended': 'ណែនាំឲ្យប្រើ',
+    'Will buy again': 'នឹងទិញម្តងទៀត',
+    'Thanks': 'អរគុណ',
+    'Thank you': 'អរគុណ',
+    'Nice app': 'កម្មវិធីពិតជាល្អ',
+    // Variants seen in real feedback rows.
+    "It's not good for me": 'វាមិនល្អសម្រាប់ខ្ញុំ',
+    'It is not good for me': 'វាមិនល្អសម្រាប់ខ្ញុំ',
+    'Not good for me': 'មិនល្អសម្រាប់ខ្ញុំ',
+    "It's good for me": 'វាល្អសម្រាប់ខ្ញុំ',
+    'Good for me': 'ល្អសម្រាប់ខ្ញុំ',
+    'Good thanks': 'ល្អ អរគុណ',
+    'Good, thanks': 'ល្អ អរគុណ',
+    'Good thank you': 'ល្អ អរគុណ',
+    'Good website': 'គេហទំព័រល្អ',
+    'Good website.': 'គេហទំព័រល្អ',
+    'The website is good': 'គេហទំព័រល្អ',
+    'Website is good': 'គេហទំព័រល្អ',
+    'Nice website': 'គេហទំព័រល្អ',
+    'Great website': 'គេហទំព័រល្អណាស់',
+    'Good app': 'កម្មវិធីល្អ',
+    'The app is good': 'កម្មវិធីល្អ',
+    'App is good': 'កម្មវិធីល្អ',
+    'Good products': 'ផលិតផលល្អ',
+    'Good price': 'តម្លៃល្អ',
+    'Good quality products': 'ផលិតផលគុណភាពល្អ',
+  };
 }
 
 class _AppLocalizationsDelegate

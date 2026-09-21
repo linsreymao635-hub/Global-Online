@@ -90,6 +90,14 @@ class AppSettings {
     _emailNotifications = p.getBool(_emailNotificationsKey) ?? true;
     _newOrderNotifications = p.getBool(_newOrderNotificationsKey) ?? true;
     _language = p.getString(_languageKey) ?? 'en';
+    _darkTheme = p.getBool(_darkKey) ?? false;
+    _storeLogo = p.getString(_storeLogoKey) ?? '';
+    _twoFactor = p.getBool(_twoFactorKey) ?? false;
+    _deliveryAreas = p.getStringList(_deliveryAreasKey) ?? const [];
+    _paymentMethods = p.getStringList(_paymentMethodsKey) ?? const [
+      'Cash on Delivery', 'Card', 'Mobile Banking', 'QR'
+    ];
+    _adminPassword = p.getString(_adminPasswordKey);
     _googleClientId = p.getString(_googleClientIdKey) ?? '';
     _googleAndroidClientId = p.getString(_googleAndroidClientIdKey) ?? '';
     _telegramBot = p.getString(_telegramBotKey) ?? '';
@@ -125,6 +133,7 @@ class AppSettings {
     } else {
       localAuth = {};
     }
+    _syncedOrders = (p.getStringList(_syncedOrdersKey) ?? const []).toSet();
     _loadAddresses(p);
   }
 
@@ -205,6 +214,15 @@ class AppSettings {
   static bool _newOrderNotifications = true;
   static const _languageKey = 'admin_language';
   static String _language = 'en';
+  static const _storeLogoKey = 'admin_store_logo';
+  static String _storeLogo = '';
+  static const _twoFactorKey = 'admin_two_factor';
+  static bool _twoFactor = false;
+  static const _deliveryAreasKey = 'admin_delivery_areas';
+  static List<String> _deliveryAreas = [];
+  static const _paymentMethodsKey = 'admin_payment_methods';
+  static List<String> _paymentMethods = ['Cash on Delivery', 'Card',
+        'Mobile Banking', 'QR'];
 
   static String get storeName => _storeName;
   static String get storeEmail => _storeEmail;
@@ -218,6 +236,10 @@ class AppSettings {
   static bool get emailNotifications => _emailNotifications;
   static bool get newOrderNotifications => _newOrderNotifications;
   static String get language => _language;
+  static String get storeLogo => _storeLogo;
+  static bool get twoFactorEnabled => _twoFactor;
+  static List<String> get deliveryAreas => List.unmodifiable(_deliveryAreas);
+  static List<String> get paymentMethods => List.unmodifiable(_paymentMethods);
 
   static Future<void> saveStoreName(String v) async {
     _storeName = v.trim().isEmpty ? 'Global Online' : v.trim();
@@ -285,11 +307,189 @@ class AppSettings {
     _language = v == 'km' ? 'km' : 'en';
     final p = await SharedPreferences.getInstance();
     await p.setString(_languageKey, _language);
+    // Keep the app-wide language in sync so the whole UI (admin panel
+    // included) boots in the chosen language after a restart.
+    await p.setString('language_code', _language);
+  }
+
+  // ------------------------------------------------------------ theme (dark)
+
+  static const _darkKey = 'dark_mode';
+  static bool _darkTheme = false;
+  static bool get darkTheme => _darkTheme;
+
+  static Future<void> saveTheme(bool v) async {
+    _darkTheme = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_darkKey, v);
+  }
+
+  static Future<void> saveStoreLogo(String v) async {
+    _storeLogo = v.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_storeLogoKey, _storeLogo);
+  }
+
+  static Future<void> saveTwoFactorEnabled(bool v) async {
+    _twoFactor = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_twoFactorKey, v);
+  }
+
+  static Future<void> saveDeliveryAreas(List<String> v) async {
+    _deliveryAreas = List<String>.from(
+        v.map((e) => e.trim()).where((e) => e.isNotEmpty));
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_deliveryAreasKey, _deliveryAreas);
+  }
+
+  static Future<void> savePaymentMethods(List<String> v) async {
+    _paymentMethods = List<String>.from(v);
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_paymentMethodsKey, _paymentMethods);
+  }
+
+  // ------------------------------------------------------------ roles & permissions
+
+  static const _rolesKey = 'admin_roles_v1';
+
+  /// Roles defined in Admin → Roles & Permissions. Persisted on this
+  /// device; starts with the three built-in roles when nothing is saved.
+  static List<Map<String, dynamic>> _roles = [];
+
+  static List<Map<String, dynamic>> get roles =>
+      List.unmodifiable(_roles);
+
+  /// The stored roles, creating the defaults on first read.
+  static Future<List<Map<String, dynamic>>> loadRoles() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_rolesKey);
+    if (raw != null) {
+      try {
+        final list = jsonDecode(raw) as List;
+        _roles = list
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .map((m) => {
+                  'name': m['name']?.toString() ?? '',
+                  'description': m['description']?.toString() ?? '',
+                  'permissions': ((m['permissions'] as List? ?? const [])
+                      .map((e) => e.toString())
+                      .toList()),
+                })
+                .where((m) => (m['name'] as String).isNotEmpty)
+                .toList();
+      } catch (_) {
+        _roles = [];
+      }
+    }
+    if (_roles.isEmpty) {
+      _roles = List<Map<String, dynamic>>.from(defaultShopRoles);
+      await p.setString(_rolesKey, jsonEncode(_roles));
+    } else if (!_roles.any((r) =>
+        (r['name'] as String).toLowerCase() ==
+        (superAdminRole['name'] as String).toLowerCase())) {
+      // Make sure existing installs always keep the built-in Super Admin
+      // role at the top with full access.
+      _roles = [Map<String, dynamic>.from(superAdminRole), ..._roles];
+      await p.setString(_rolesKey, jsonEncode(_roles));
+    }
+    return List<Map<String, dynamic>>.from(_roles);
+  }
+
+  /// Replace the whole role list and persist it.
+  static Future<void> saveRoles(List<Map<String, dynamic>> roles) async {
+    _roles = List<Map<String, dynamic>>.from(roles);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_rolesKey, jsonEncode(_roles));
+  }
+
+  /// The built-in Super Admin role: it holds every permission in the system
+  /// and is meant to be permanent (the UI protects it from edits/deletes).
+  static const Map<String, dynamic> superAdminRole = {
+    'name': 'Super Admin',
+    'description': 'Unrestricted access to every feature in the system.',
+    'permissions': [
+      'Access the admin panel',
+      'Manage products, categories and shops',
+      'Manage users and their roles',
+      'Manage roles and permissions',
+      'View all users and their data',
+      'Manage orders and statuses',
+      'Manage payments and refunds',
+      'View reports and settings',
+      'Reply to feedback',
+      'Edit system settings',
+      'Change system-wide security settings',
+      'Browse and purchase products',
+      'Manage own account and orders',
+      'Leave reviews and feedback',
+    ],
+  };
+
+  /// The built-in roles shown before the admin customises anything.
+  static const List<Map<String, dynamic>> defaultShopRoles = [
+    superAdminRole,
+    {
+      'name': 'Admin',
+      'description': 'Full control over every shop feature.',
+      'permissions': [
+        'Manage products, categories and shops',
+        'Manage users and their roles',
+        'Manage orders and statuses',
+        'View reports and settings',
+        'Reply to feedback',
+        'Edit system settings',
+      ],
+    },
+    {
+      'name': 'Vendor',
+      'description': 'Sells products and manages own listings.',
+      'permissions': [
+        'Manage own products and listings',
+        'View own sales and orders',
+        'Reply to customer feedback',
+      ],
+    },
+    {
+      'name': 'User',
+      'description': 'Shops, buys and reviews products.',
+      'permissions': [
+        'Browse and purchase products',
+        'Manage own account and orders',
+        'Leave reviews and feedback',
+      ],
+    },
+  ];
+
+  /// Erase the entire admin activity log.
+  static Future<void> clearActivityLog() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_activityKey);
   }
 
   // ------------------------------------------------------------ activity log
 
   static const _activityKey = 'admin_activity_log';
+
+  /// Admin-chosen login password (Settings → Security). Null = the default
+  /// "admin123" is still in use. Loaded with [load] and consulted by
+  /// [ApiService.isAdminLogin].
+  static const _adminPasswordKey = 'admin_password_override';
+  static String? _adminPassword;
+
+  /// The admin's changed login password, or null when the default is active.
+  static String? get adminPasswordOverride => _adminPassword;
+
+  /// Change the admin's login password. An empty value restores the default.
+  static Future<void> setAdminPassword(String v) async {
+    _adminPassword = v.trim().isEmpty ? null : v.trim();
+    final p = await SharedPreferences.getInstance();
+    if (_adminPassword == null) {
+      await p.remove(_adminPasswordKey);
+    } else {
+      await p.setString(_adminPasswordKey, _adminPassword!);
+    }
+  }
 
   /// The most recent admin actions, newest first, persisted on this device
   /// (in 3.100 the list source fields are carried as static const keys).
@@ -554,6 +754,39 @@ class AppSettings {
   }
 
   static const _ordersKey = 'all_orders_v1';
+
+  /// Ids of orders this device confirmed were written to the shared cloud
+  /// (`saveOrder` returned true). When the cloud is reachable, these ids are
+  /// the source of truth for ORDER EXISTENCE: a synced order that is missing
+  /// from a successful cloud read was deleted by the admin, so its stale
+  /// local copy is dropped. Orders that never reached the cloud (placed
+  /// while offline) keep working purely from the local cache.
+  static const _syncedOrdersKey = 'cloud_synced_order_ids_v1';
+  static Set<String> _syncedOrders = {};
+
+  /// The ids of orders confirmed present in the shared cloud.
+  static Set<String> get cloudSyncedOrderIds => Set.unmodifiable(_syncedOrders);
+
+  static Future<Set<String>> loadSyncedOrderIds() async {
+    if (_syncedOrders.isNotEmpty) return Set.of(_syncedOrders);
+    final p = await SharedPreferences.getInstance();
+    _syncedOrders = (p.getStringList(_syncedOrdersKey) ?? const []).toSet();
+    return Set.of(_syncedOrders);
+  }
+
+  /// Remember that [id] was written to the cloud.
+  static Future<void> markOrderSynced(String id) async {
+    if (!_syncedOrders.add(id)) return;
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_syncedOrdersKey, _syncedOrders.toList());
+  }
+
+  /// Forget that [id] was in the cloud (used when the order is deleted).
+  static Future<void> unmarkOrderSynced(String id) async {
+    if (!_syncedOrders.remove(id)) return;
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_syncedOrdersKey, _syncedOrders.toList());
+  }
 
   /// All orders placed on this device, shared across accounts so the
   /// Admin panel can manage them. Persisted so order history (and the

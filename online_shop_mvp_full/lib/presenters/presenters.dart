@@ -105,20 +105,91 @@ class OrderPresenter {
   Future<void> load({String? owner}) async {
     orders.clear();
     var cloud = const <Order>[];
+    var cloudReachable = false;
     if (!SupabaseService.testMode) {
-      cloud = await SupabaseService.instance.orders(owner: owner);
+      final result = await SupabaseService.instance.ordersResult(owner: owner);
+      cloud = result.orders;
+      cloudReachable = result.reachable;
     }
     final local = await AppSettings.loadAllOrders();
+    final synced = await AppSettings.loadSyncedOrderIds();
+    final merged = OrderPresenter.mergeOrders(
+        cloud: cloud,
+        cloudReachable: cloudReachable,
+        local: local,
+        synced: synced,
+        owner: owner);
+    orders.addAll(merged);
+
+    // Persist the cloud-authoritative copies too. Previously this cache was
+    // only written at checkout, leaving a `Processing` copy on the device
+    // after an admin changed it to Shipped/Delivered. A later offline read
+    // could then resurrect that stale status (or a deleted order).
+    if (cloudReachable) {
+      final allScope = owner == null || owner.isEmpty;
+      bool belongsToScope(Order o) =>
+          allScope || o.owner.isEmpty || o.owner == owner;
+      final cloudIds = cloud.map((o) => o.id).toSet();
+      final reconciled = <Order>[
+        ...local.where((o) {
+          if (!belongsToScope(o)) return true;
+          // Keep purely offline orders. A cloud-synced row is replaced by its
+          // newest cloud copy, or dropped when the admin deleted it.
+          return !synced.contains(o.id);
+        }),
+        ...cloud,
+      ];
+      await AppSettings.saveAllOrders(reconciled);
+      // A missing synced id was deleted in the cloud, so it must not be
+      // treated as an unsent local order on the next refresh.
+      for (final id in synced.where((id) =>
+          !cloudIds.contains(id) &&
+          local.any((o) => o.id == id && belongsToScope(o)))) {
+        await AppSettings.unmarkOrderSynced(id);
+      }
+    }
+  }
+
+  /// Merge cloud + device-local orders, newest first.
+  ///
+  /// The cloud is the SOURCE OF TRUTH whenever it is reachable:
+  ///  * cloud copies always win over device copies, so a status the admin
+  ///    changed (Delivered / Shipped / …) is shown exactly as stored;
+  ///  * a previously-synced order that is MISSING from a successful cloud
+  ///    read was deleted by the admin, so its stale local copy is dropped;
+  ///  * orders that never reached the cloud (placed while offline) are kept.
+  ///
+  /// [owner] limits the result to one account's orders (so one user never
+  /// sees another user's orders); null/empty loads everything (admin).
+  static List<Order> mergeOrders({
+    required List<Order> cloud,
+    required bool cloudReachable,
+    required List<Order> local,
+    required Set<String> synced,
+    String? owner,
+  }) {
     final mine = owner == null || owner.isEmpty;
-    final seen = <String>{};
-    for (final o in [...cloud, ...local]) {
+    final byId = <String, Order>{};
+    for (final o in cloud) {
+      // Same account rule as the local rows below: the cloud query already
+      // filters by owner, and this second pass guarantees one user's orders
+      // can never leak into another user's history even if a caller passes
+      // an unfiltered list. Legacy ownerless rows stay visible to everyone.
+      if (!(mine || o.owner.isEmpty || o.owner == owner)) continue;
+      byId[o.id] = o;
+    }
+    for (final o in local) {
       // Device-local orders must match the account too, so a shared phone
       // does not leak one account's orders into another's history. Legacy
       // local rows with no owner at all stay visible to everyone (they
       // predate per-account ownership).
       if (!(mine || o.owner.isEmpty || o.owner == owner)) continue;
-      if (seen.add(o.id)) orders.add(o);
+      if (cloudReachable && synced.contains(o.id) && !byId.containsKey(o.id)) {
+        continue; // deleted from the cloud — drop the stale local copy
+      }
+      byId.putIfAbsent(o.id, () => o);
     }
+    return byId.values.toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
   Future<void> create(List<CartItem> items, double total, Address a,
@@ -136,7 +207,11 @@ class OrderPresenter {
     orders.insert(0, order);
     await AppSettings.saveAllOrders(orders);
     // Push to the shared cloud so the Admin panel (any device) sees it.
-    await SupabaseService.instance.saveOrder(order);
+    final ok = await SupabaseService.instance.saveOrder(order);
+    // Remember the order reached the cloud: it is then treated as cloud
+    // authority for existence (a later "missing" read means the admin
+    // deleted it) while keeping working offline orders purely local.
+    if (ok) await AppSettings.markOrderSynced(order.id);
   }
 
   /// Update the status of an order (used by the Admin panel) — locally and
@@ -144,16 +219,29 @@ class OrderPresenter {
   ///
   /// Returns true when the cloud write succeeded, so the admin UI can warn
   /// instead of silently pretending the shopper will see the new status.
-  /// The local cache is NOT rewritten wholesale here: it holds every
-  /// account's orders on this device, and overwriting it from the admin's
-  /// in-memory list could clobber other users' data.
   Future<bool> setStatus(String id, String status) async {
+    // Do not mutate the locally displayed/cache copy until PostgREST confirms
+    // that the database row was actually updated. This avoids a false
+    // "Delivered" state when a write is rejected or the network drops.
+    final saved = await SupabaseService.instance.updateOrderStatus(id, status);
+    if (!saved) return false;
     for (var i = 0; i < orders.length; i++) {
       if (orders[i].id == id && orders[i].status != status) {
         orders[i] = orders[i].copyWith(status: status);
         break;
       }
     }
-    return SupabaseService.instance.updateOrderStatus(id, status);
+    return true;
+  }
+
+  /// Remove an order (admin delete) from the in-memory list, the local
+  /// cache and the cloud-synced marker so it disappears from every device.
+  Future<void> remove(String id) async {
+    final removed = orders.where((o) => o.id != id).toList();
+    orders
+      ..clear()
+      ..addAll(removed);
+    await AppSettings.saveAllOrders(orders);
+    await AppSettings.unmarkOrderSynced(id);
   }
 }

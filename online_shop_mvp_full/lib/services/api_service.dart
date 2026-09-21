@@ -22,8 +22,13 @@ class ApiService {
   /// Built-in demo administrator account. The admin signs in on the
   /// COMPUTER with PHONE NUMBER + password ("066778213" / "admin123").
   static const adminUsername = 'admin';
-  static const adminPassword = 'admin123';
+  static const _defaultAdminPassword = 'admin123';
   static const adminPhone = '066778213';
+
+  /// The current admin password — the default, unless the admin changed it
+  /// from Settings → Security (stored in [AppSettings.adminPasswordOverride]).
+  static String get adminPassword =>
+      AppSettings.adminPasswordOverride ?? _defaultAdminPassword;
 
   static String _digitsOf(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
 
@@ -89,7 +94,8 @@ class ApiService {
       await p.remove(_localProductsKey);
       return;
     }
-    await p.setString(_localProductsKey, jsonEncode(locals.map(_productJson).toList()));
+    await p.setString(
+        _localProductsKey, jsonEncode(locals.map(_productJson).toList()));
   }
 
   static Map<String, dynamic> _productJson(Product e) => {
@@ -106,6 +112,7 @@ class ApiService {
         'images': e.images,
         'status': e.status,
         'verified': e.verified,
+        'vendorUsername': e.vendorUsername,
       };
 
   /// Merge [locals] (device-only products/edits) over [source], newest
@@ -192,18 +199,16 @@ class ApiService {
       // admin's own Users table. NO password_hash is stored — the built-in
       // desktop check above is the only way in, so the cloud row can never
       // be used to sign in (and never bypasses the phone block).
-      supa
-          .upsertUser({
-            'username': adminUsername,
-            'first_name': 'Admin',
-            'last_name': '',
-            'email': 'admin@globalonline.demo',
-            'phone': adminPhone,
-            'image': '',
-            'provider': 'local',
-            'is_admin': true,
-          })
-          .catchError((_) => false);
+      supa.upsertUser({
+        'username': adminUsername,
+        'first_name': 'Admin',
+        'last_name': '',
+        'email': 'admin@globalonline.demo',
+        'phone': adminPhone,
+        'image': '',
+        'provider': 'local',
+        'is_admin': true,
+      }).catchError((_) => false);
       return User(
           id: 0,
           firstName: 'Admin',
@@ -284,8 +289,8 @@ class ApiService {
     return apiUser;
   }
 
-  Future<User?> signup(String f, String l, String u, String p, String e,
-      String ph) async {
+  Future<User?> signup(
+      String f, String l, String u, String p, String e, String ph) async {
     // Store the account in the shared cloud directory so it works on every
     // device. Passwords are hashed (SHA-256 + salt), never sent as plain text.
     final uname = u.trim().toLowerCase();
@@ -312,12 +317,7 @@ class ApiService {
     // New account is now in the shared cloud directory.
     await AppSettings.markSessionCloudOk(true);
     return User(
-        id: 0,
-        firstName: f,
-        lastName: l,
-        username: uname,
-        email: e,
-        phone: ph);
+        id: 0, firstName: f, lastName: l, username: uname, email: e, phone: ph);
   }
 
   void _ok(http.Response r) {
@@ -356,7 +356,8 @@ class ApiService {
         thumbnail: p.thumbnail,
         images: p.images,
         status: p.status,
-        verified: p.verified);
+        verified: p.verified,
+        vendorUsername: p.vendorUsername);
     // Keep device-only products in their own store so catalog refreshes
     // (search, demo API, cache) can never overwrite them.
     final locals = await _loadLocalProducts();
@@ -450,8 +451,7 @@ class ApiService {
       }
     }
 
-    final hidden =
-        (p.getStringList(_hiddenCategoriesKey) ?? const []).toSet();
+    final hidden = (p.getStringList(_hiddenCategoriesKey) ?? const []).toSet();
 
     // Local categories added/edited by the admin lead the list (they win the
     // slug-dedupe below), then the source categories — every overwritten or
@@ -472,9 +472,8 @@ class ApiService {
 
     final r = await http.get(Uri.parse('$baseUrl/products/categories'));
     _ok(r);
-    final list = (jsonDecode(r.body) as List)
-        .map((e) => Category.fromJson(e))
-        .toList();
+    final list =
+        (jsonDecode(r.body) as List).map((e) => Category.fromJson(e)).toList();
 
     return merge(list);
   }
@@ -482,16 +481,14 @@ class ApiService {
   /// Same slug rules used everywhere when saving a category, exposed so the
   /// admin UI can show the final slug instantly after an edit.
   static String slugify(String s) => s
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
 
   String _slugify(String s) => ApiService.slugify(s);
 
   Future<void> addCategory(String name,
-      {String slug = '',
-      String description = '',
-      String image = ''}) async {
+      {String slug = '', String description = '', String image = ''}) async {
     final label = name.trim();
     if (label.isEmpty) return;
     // Shared cloud first so every device sees the new category.
@@ -509,8 +506,7 @@ class ApiService {
     if (raw != null) {
       try {
         list.addAll((jsonDecode(raw) as List)
-            .map((e) =>
-                Category.fromJson((e as Map).cast<String, dynamic>()))
+            .map((e) => Category.fromJson((e as Map).cast<String, dynamic>()))
             .toList());
       } catch (_) {}
     }
@@ -524,13 +520,15 @@ class ApiService {
         image: image.trim()));
     await p.setString(
         _localCategoriesKey,
-        jsonEncode(list.map((c) => {
-              'slug': c.slug,
-              'name': c.name,
-              'url': c.url,
-              'description': c.description,
-              'image': c.image,
-            }).toList()));
+        jsonEncode(list
+            .map((c) => {
+                  'slug': c.slug,
+                  'name': c.name,
+                  'url': c.url,
+                  'description': c.description,
+                  'image': c.image,
+                })
+            .toList()));
   }
 
   /// Edit a category everywhere: Supabase rows are updated for every device;
@@ -556,8 +554,7 @@ class ApiService {
     if (raw != null) {
       try {
         local.addAll((jsonDecode(raw) as List)
-            .map((e) =>
-                Category.fromJson((e as Map).cast<String, dynamic>()))
+            .map((e) => Category.fromJson((e as Map).cast<String, dynamic>()))
             .toList());
       } catch (_) {}
     }
@@ -588,19 +585,20 @@ class ApiService {
         final hidden =
             (p.getStringList(_hiddenCategoriesKey) ?? const []).toList();
         if (!hidden.contains(original.slug)) hidden.add(original.slug);
-        await p.setStringList(
-            _hiddenCategoriesKey, hidden.toSet().toList());
+        await p.setStringList(_hiddenCategoriesKey, hidden.toSet().toList());
       }
     }
     await p.setString(
         _localCategoriesKey,
-        jsonEncode(local.map((c) => {
-              'slug': c.slug,
-              'name': c.name,
-              'url': c.url,
-              'description': c.description,
-              'image': c.image,
-            }).toList()));
+        jsonEncode(local
+            .map((c) => {
+                  'slug': c.slug,
+                  'name': c.name,
+                  'url': c.url,
+                  'description': c.description,
+                  'image': c.image,
+                })
+            .toList()));
   }
 
   Future<void> deleteCategory(Category c) async {

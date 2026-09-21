@@ -10,6 +10,44 @@ import '../presenters/presenters.dart';
 import '../repositories/repositories.dart';
 import '../services/api_service.dart';
 import '../services/app_settings.dart';
+import 'admin_sections.dart';
+
+/// Polished Dark-mode color scheme shared by the admin panel and the app
+/// root, so the shop, login and admin all switch to the SAME dark look:
+/// deep indigo surfaces with the brand accent kept alive and readable.
+const ColorScheme adminDarkColorScheme = ColorScheme.dark(
+  primary: Color(0xFF9D92FF),
+  onPrimary: Color(0xFF18105F),
+  primaryContainer: Color(0xFF3F36B0),
+  onPrimaryContainer: Color(0xFFE5E1FF),
+  secondary: Color(0xFFC9C4FF),
+  onSecondary: Color(0xFF2A2570),
+  secondaryContainer: Color(0xFF3A348C),
+  onSecondaryContainer: Color(0xFFE0DCFC),
+  tertiary: Color(0xFFF2A9B5),
+  onTertiary: Color(0xFF5C1A28),
+  error: Color(0xFFFF7373),
+  onError: Color(0xFF400000),
+  errorContainer: Color(0xFF932323),
+  onErrorContainer: Color(0xFFFFDAD5),
+  surface: Color(0xFF151A26),
+  onSurface: Color(0xFFE7EAF3),
+  surfaceDim: Color(0xFF11151F),
+  surfaceBright: Color(0xFF333A4B),
+  surfaceContainerLowest: Color(0xFF0E121B),
+  surfaceContainerLow: Color(0xFF131823),
+  surfaceContainer: Color(0xFF151A26),
+  surfaceContainerHigh: Color(0xFF1C2231),
+  surfaceContainerHighest: Color(0xFF232A3B),
+  onSurfaceVariant: Color(0xFFA8AFC4),
+  outline: Color(0xFF525B72),
+  outlineVariant: Color(0xFF293042),
+  shadow: Color(0xFF000000),
+  scrim: Color(0xFF000000),
+  inverseSurface: Color(0xFFE7EAF3),
+  onInverseSurface: Color(0xFF12161F),
+  inversePrimary: Color(0xFF6154E8),
+);
 
 /// SideQuest-style admin dashboard: fixed sidebar, top bar with admin chip,
 /// and wide data tables (Companies / Categories / Products / Users / Orders).
@@ -24,12 +62,23 @@ class AdminPanelPage extends StatefulWidget {
   /// session in the app root so the app returns to the LOGIN page instead
   /// of the shop page.
   final VoidCallback? onLogout;
+
+  /// Current theme state so the admin Settings page and the top-bar toggle
+  /// show the right icon; toggling it rebuilds the whole app via the root.
+  final bool dark;
+  final ValueChanged<bool>? setTheme;
+
+  /// Lets the admin Settings page switch the whole app's language live.
+  final void Function(Locale)? setLocale;
   const AdminPanelPage(
       {super.key,
       required this.admin,
       required this.repo,
       required this.orders,
-      this.onLogout});
+      this.dark = false,
+      this.setTheme,
+      this.onLogout,
+      this.setLocale});
 
   @override
   State<AdminPanelPage> createState() => AdminPanelPageState();
@@ -37,6 +86,11 @@ class AdminPanelPage extends StatefulWidget {
 
 class AdminPanelPageState extends State<AdminPanelPage> {
   String _page = 'companies'; // default landing page
+
+  // Local theme state: the pushed route is never rebuilt with a fresh
+  // `widget.dark`, so keep the value here and mirror it to the app root
+  // (the same pattern the shopper Settings page uses).
+  late bool _dark = widget.dark;
 
   // Cached data shared between pages (loaded once, refreshed on demand).
   List<Product> _products = [];
@@ -48,7 +102,10 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   String? _error;
   User? _selectedUser; // detail view opened from the Users list
   Order? _selectedOrder; // detail view opened from the Orders list
-  int _userPage = 0, _orderPage = 0, _productPage = 0, _catPage = 0,
+  int _userPage = 0,
+      _orderPage = 0,
+      _productPage = 0,
+      _catPage = 0,
       _feedbackPage = 0;
 
   // Slug of the category row that was just saved to the editor dialog, so
@@ -75,8 +132,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   // shopper (a new row in the shared `orders` table) appears on the
   // Orders page instantly — even while the admin is already looking at
   // it. The realtime subscription fires on insert (new order) and update
-  // (status change); the periodic timer quietly re-fetches every 20s as
-  // a fallback when realtime is unavailable.
+  // (status change); a fast 6s periodic timer quietly re-fetches as the
+  // fallback when realtime is unavailable.
   Timer? _ordersPoll;
   bool _loadingOrders = false;
 
@@ -90,22 +147,23 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     // Push-based live updates (no refresh needed).
     widget.repo.supa.watchFeedback(_onLiveFeedback);
     // Fallback: quietly refresh feedback every 20 seconds.
-    _feedbackPoll = Timer.periodic(
-        const Duration(seconds: 20), (_) => _onLiveFeedback());
+    _feedbackPoll =
+        Timer.periodic(const Duration(seconds: 20), (_) => _onLiveFeedback());
     // Live Users table: realtime insert events + the same 20s poll
     // fallback, so signups/sign-ins show up without leaving the page.
-    widget.repo.supa.watchUsers(
-        onInsert: _onLiveUsers,
-        onDelete: (_) => _onLiveUsers());
-    _usersPoll = Timer.periodic(
-        const Duration(seconds: 20), (_) => _onLiveUsers());
+    widget.repo.supa
+        .watchUsers(onInsert: _onLiveUsers, onDelete: (_) => _onLiveUsers());
+    _usersPoll =
+        Timer.periodic(const Duration(seconds: 20), (_) => _onLiveUsers());
     // Live Orders table: realtime insert (new order) + update (status
-    // change) events + the same 20s poll fallback, so a shopper's new
-    // order appears on the Orders page without the admin leaving it.
-    widget.repo.supa.watchOrders(
-        onInsert: _onLiveOrders, onChanged: _onLiveOrders);
-    _ordersPoll = Timer.periodic(
-        const Duration(seconds: 20), (_) => _onLiveOrders());
+    // change) events + a fast 3s poll fallback, so a shopper's new
+    // order appears on the Orders page almost instantly — without the
+    // admin leaving the page (realtime pushes it the moment it happens;
+    // the poll guarantees it even when realtime is unavailable or slow).
+    widget.repo.supa
+        .watchOrders(onInsert: _onLiveOrders, onChanged: _onLiveOrders);
+    _ordersPoll =
+        Timer.periodic(const Duration(seconds: 3), (_) => _onLiveOrders());
   }
 
   @override
@@ -128,9 +186,10 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     try {
       final feedbacks = await widget.repo.feedbacks();
       if (!mounted) return;
-      final changed = feedbacks.length != _feedbacks.length;
+      final known = _feedbacks.map((f) => f.id).toSet();
+      final fresh = feedbacks.where((f) => !known.contains(f.id)).toList();
       setState(() => _feedbacks = feedbacks);
-      if (changed && _page != 'feedback') {
+      if (_feedbacks.isNotEmpty && fresh.isNotEmpty && _page != 'feedback') {
         _toast(AppLocalizations.of(context).t('New feedback received'));
       }
     } catch (_) {
@@ -147,13 +206,17 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     if (_loadingUsers || !mounted) return;
     _loadingUsers = true;
     try {
+      // Small delay to ensure the database transaction is fully committed
+      // and visible to SELECT queries after a realtime insert event.
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
       final users = await widget.repo.users();
       if (!mounted) return;
-      // Toast only when the list actually GREW from a known non-empty
-      // state — avoids a false "new user" on the very first fetch.
-      final grew = _users.isNotEmpty && users.length > _users.length;
+      final known = _users.map((u) => u.username).toSet();
+      final fresh = users.where((u) => !known.contains(u.username)).toList();
       setState(() => _users = users);
-      if (grew && _page != 'users') {
+      if (_users.isNotEmpty && fresh.isNotEmpty && _page != 'users') {
         _toast(AppLocalizations.of(context).t('New user signed in'));
       }
     } catch (_) {
@@ -164,22 +227,39 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   }
 
   /// The order list may have changed (a shopper placed a NEW order, pushed
-  /// by realtime or picked up by the 20s poll, or an order's status was
+  /// by realtime or picked up by the poll, or an order's status was
   /// changed on another device): quietly refetch ONLY orders so the page
   /// never flickers and existing rows are never duplicated (the whole
-  /// list is replaced with the freshest cloud data, newest first).
+  /// list is replaced with the freshest cloud data, newest first — so the
+  /// admin always sees exactly what the database holds).
   Future<void> _onLiveOrders() async {
     if (_loadingOrders || !mounted) return;
     _loadingOrders = true;
     try {
+      // Small delay to ensure the database transaction is fully committed
+      // and visible to SELECT queries after a realtime insert/update event.
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
       final orders = await widget.repo.orders();
       if (!mounted) return;
-      // Toast only when the list actually GREW from a known non-empty
-      // state — avoids a false "new order" on the very first fetch or
-      // when a status changed (that is an update, not a new order).
-      final grew = _orders.isNotEmpty && orders.length > _orders.length;
-      setState(() => _orders = orders);
-      if (grew && _page != 'orders') {
+      final byId = {for (final o in _orders) o.id: o};
+      final newOnes = orders.where((o) => !byId.containsKey(o.id)).toList();
+      final statusChanged = orders.where((o) {
+        final old = byId[o.id];
+        return old != null && old.status != o.status;
+      }).toList();
+      // Rebuild only when something actually changed (a new order, a status
+      // change, or the row count moved). On quiet polls the page keeps its
+      // current frame so repeated quiet refreshes never flash the table.
+      if (newOnes.isNotEmpty ||
+          statusChanged.isNotEmpty ||
+          orders.length != _orders.length) {
+        setState(() => _orders = orders);
+      }
+      if (_orders.isNotEmpty &&
+          (newOnes.isNotEmpty || statusChanged.isNotEmpty) &&
+          _page != 'orders') {
         _toast(AppLocalizations.of(context).t('New order received'));
       }
     } catch (_) {
@@ -202,28 +282,52 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       }
       _error = null;
     });
-    try {
-      final products = await widget.repo.products();
-      final cats = await widget.repo.categories();
-      final users = await widget.repo.users();
-      final orders = await widget.repo.orders();
-      final feedbacks = await widget.repo.feedbacks();
-      if (!mounted) return;
-      setState(() {
-        _products = products;
-        _cats = cats;
-        _users = users;
-        _orders = orders;
-        _feedbacks = feedbacks;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
-    }
+    // Fire all five backend reads at the SAME time and wait for the whole
+    // batch, so a page (Orders included) fills in as fast as the slowest
+    // request instead of the sum of five sequential round-trips. A failed
+    // dataset is recorded but never aborts the others.
+    String? reloadError;
+    List<Product>? products;
+    List<Category>? cats;
+    List<User>? users;
+    List<Order>? orders;
+    List<FeedbackItem>? feedbacks;
+    await Future.wait<void>([
+      widget.repo
+          .products()
+          .then<void>((v) => products = v)
+          .catchError((Object e) {
+        reloadError = e.toString();
+      }),
+      widget.repo
+          .categories()
+          .then<void>((v) => cats = v)
+          .catchError((Object e) {
+        reloadError = e.toString();
+      }),
+      widget.repo.users().then<void>((v) => users = v).catchError((Object e) {
+        reloadError = e.toString();
+      }),
+      widget.repo.orders().then<void>((v) => orders = v).catchError((Object e) {
+        reloadError = e.toString();
+      }),
+      widget.repo
+          .feedbacks()
+          .then<void>((v) => feedbacks = v)
+          .catchError((Object e) {
+        reloadError = e.toString();
+      }),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (products != null) _products = products!;
+      if (cats != null) _cats = cats!;
+      if (users != null) _users = users!;
+      if (orders != null) _orders = orders!;
+      if (feedbacks != null) _feedbacks = feedbacks!;
+      _loading = false;
+      _error = reloadError;
+    });
   }
 
   /// Refetch only the categories in the background (no spinner) so it can
@@ -279,11 +383,9 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     _reload();
   }
 
-  void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(msg),
-          width: 340,
-          behavior: SnackBarBehavior.floating));
+  void _toast(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg), width: 340, behavior: SnackBarBehavior.floating));
 
   /// Admin logout: clear the session FIRST (so the app root swaps its home
   /// to the login page), then close the panel itself. Result: Logout in the
@@ -295,8 +397,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
 
   // ---------------------------------------------------------------- sidebar
 
-  Widget _sideItem(IconData icon, String label, String key,
-      {bool chevron = false}) {
+  Widget _sideItem(IconData icon, String label, String key) {
     final sel = _page == key;
     final sch = Theme.of(context).colorScheme;
     return Padding(
@@ -308,12 +409,10 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           borderRadius: BorderRadius.circular(10),
           onTap: () => _go(key),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(children: [
               Icon(icon,
-                  size: 18,
-                  color: sel ? Colors.white : sch.onSurfaceVariant),
+                  size: 18, color: sel ? Colors.white : sch.onSurfaceVariant),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(label,
@@ -321,15 +420,9 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontSize: 14,
-                        fontWeight:
-                            sel ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
                         color: sel ? Colors.white : sch.onSurface)),
               ),
-              if (chevron)
-                Icon(Icons.expand_more,
-                    size: 18,
-                    color:
-                        sel ? Colors.white : sch.onSurfaceVariant),
             ]),
           ),
         ),
@@ -343,9 +436,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     return Container(
       width: 210,
       color: sch.surface,
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Header exactly 64px tall — the SAME height as the top bar — with
         // the same bottom border, so the two header lines line up as one
         // continuous equal line across the whole screen.
@@ -353,8 +444,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           height: 64,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            border:
-                Border(bottom: BorderSide(color: sch.outlineVariant)),
+            border: Border(bottom: BorderSide(color: sch.outlineVariant)),
           ),
           child: Center(
             // Real shop logo, centered in the header.
@@ -365,26 +455,17 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView(padding: EdgeInsets.zero, children: [
-            _sideItem(Icons.dashboard_outlined, tr('Dashboard'), 'dashboard',
-                chevron: true),
-            _sideItem(
-                Icons.storefront_outlined, tr('Shops'), 'companies'),
-            _sideItem(
-                Icons.category_outlined, tr('Categories'), 'categories'),
-            _sideItem(
-                Icons.inventory_2_outlined, tr('Products'), 'products'),
+            _sideItem(Icons.dashboard_outlined, tr('Dashboard'), 'dashboard'),
+            _sideItem(Icons.storefront_outlined, tr('Shops'), 'companies'),
+            _sideItem(Icons.category_outlined, tr('Categories'), 'categories'),
+            _sideItem(Icons.inventory_2_outlined, tr('Products'), 'products'),
             _sideItem(Icons.people_outline, tr('Users'), 'users'),
-            _sideItem(
-                Icons.receipt_long_outlined, tr('Orders'), 'orders'),
-            _sideItem(Icons.rate_review_outlined, tr('Feedback'),
-                'feedback'),
+            _sideItem(Icons.receipt_long_outlined, tr('Orders'), 'orders'),
+            _sideItem(Icons.rate_review_outlined, tr('Feedback'), 'feedback'),
             _sideItem(Icons.bar_chart_outlined, tr('Reports'), 'reports'),
-            _sideItem(Icons.notifications_none, tr('Notifications'),
-                'notifications'),
             _sideItem(Icons.settings_outlined, tr('Settings'), 'settings'),
             _sideItem(Icons.verified_user_outlined, tr('Administration'),
-                'administration',
-                chevron: true),
+                'administration'),
           ]),
         ),
         Divider(height: 1, color: sch.outlineVariant),
@@ -398,6 +479,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
 
   Widget _topBar() {
     final sch = Theme.of(context).colorScheme;
+    final tr = AppLocalizations.of(context).t;
+    final currentLang = AppLocalizations.of(context).locale.languageCode;
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -417,9 +500,121 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                         fontSize: 19, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(_pageSubtitle,
-                    style: TextStyle(
-                        fontSize: 12, color: sch.onSurfaceVariant)),
+                    style:
+                        TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
               ]),
+        ),
+        // Language switcher: quick EN/KM toggle next to the profile chip.
+        PopupMenuButton<String>(
+          tooltip: tr('Language'),
+          onSelected: (code) async {
+            if (code == currentLang) return;
+            await AppSettings.saveLanguage(code);
+            if (!mounted) return;
+            widget.setLocale?.call(Locale(code));
+          },
+          itemBuilder: (c) => [
+            PopupMenuItem(
+                value: 'en',
+                child: Row(children: [
+                  Icon(
+                      currentLang == 'en'
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 18,
+                      color: currentLang == 'en'
+                          ? const Color(0xFF5B4FE9)
+                          : sch.outline),
+                  const SizedBox(width: 10),
+                  const Text('\u{1F1EC}\u{1F1E7}  English'),
+                ])),
+            PopupMenuItem(
+                value: 'km',
+                child: Row(children: [
+                  Icon(
+                      currentLang == 'km'
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 18,
+                      color: currentLang == 'km'
+                          ? const Color(0xFF5B4FE9)
+                          : sch.outline),
+                  const SizedBox(width: 10),
+                  const Text('\u{1F1F0}\u{1F1ED}  ភាសាខ្មែរ'),
+                ])),
+          ],
+          child: Container(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: sch.outlineVariant),
+                color: sch.surface),
+            child: Row(children: [
+              Icon(Icons.language_outlined,
+                  size: 18, color: sch.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(currentLang.toUpperCase(),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+        // Theme switcher: Light/Dark mode, styled like the language chip
+        // that sits right next to it, so the whole top bar stays even.
+        PopupMenuButton<bool>(
+          tooltip: tr('Theme'),
+          initialValue: _dark,
+          onSelected: (dark) {
+            setState(() => _dark = dark);
+            widget.setTheme?.call(dark);
+          },
+          itemBuilder: (c) => [
+            PopupMenuItem(
+                value: false,
+                child: Row(children: [
+                  Icon(
+                      !_dark
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 18,
+                      color: !_dark ? const Color(0xFF5B4FE9) : sch.outline),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.light_mode_outlined, size: 17),
+                  const SizedBox(width: 8),
+                  Text(tr('Light mode')),
+                ])),
+            PopupMenuItem(
+                value: true,
+                child: Row(children: [
+                  Icon(
+                      _dark
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 18,
+                      color: _dark ? const Color(0xFF5B4FE9) : sch.outline),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.dark_mode_outlined, size: 17),
+                  const SizedBox(width: 8),
+                  Text(tr('Dark mode')),
+                ])),
+          ],
+          child: Container(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: sch.outlineVariant),
+                color: sch.surface),
+            child: Row(children: [
+              Icon(_dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  size: 18, color: sch.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(_dark ? tr('Dark') : tr('Light'),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700)),
+            ]),
+          ),
         ),
         // Admin identity chip: profile photo (or gradient initial), name
         // and email. Clicking it opens the profile card with the full
@@ -428,8 +623,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           borderRadius: BorderRadius.circular(14),
           onTap: _showProfileCard,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: sch.outlineVariant),
@@ -448,9 +642,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                           end: Alignment.bottomRight,
                           colors: [Color(0xFF5B4FE9), Color(0xFF9C6ADE)])
                       : null,
-                  color: _adminAvatarImage == null
-                      ? null
-                      : sch.primaryContainer,
+                  color:
+                      _adminAvatarImage == null ? null : sch.primaryContainer,
                   image: _adminAvatarImage != null
                       ? DecorationImage(
                           image: _adminAvatarImage!, fit: BoxFit.cover)
@@ -480,16 +673,13 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                             ? widget.admin.fullName
                             : 'Admin',
                         style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
+                            fontSize: 12, fontWeight: FontWeight.w700)),
                     Text(widget.admin.email,
                         style: TextStyle(
-                            fontSize: 10,
-                            color: sch.onSurfaceVariant)),
+                            fontSize: 10, color: sch.onSurfaceVariant)),
                   ]),
               const SizedBox(width: 6),
-              Icon(Icons.expand_more,
-                  size: 18, color: sch.onSurfaceVariant),
+              Icon(Icons.expand_more, size: 18, color: sch.onSurfaceVariant),
             ]),
           ),
         ),
@@ -546,166 +736,162 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         final admin = _admin;
         final name = admin.fullName.isNotEmpty ? admin.fullName : 'Admin';
         return Dialog(
-        backgroundColor: sch.surface,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          // ONE Stack holds the whole card so the avatar AND its camera
-          // badge stay inside the Stack's hit-test bounds: Flutter renders
-          // children painted outside a Stack (Clip.none) but never delivers
-          // taps there — which is why the badge was not clickable before.
-          child: Stack(alignment: Alignment.topCenter, children: [
-            Column(mainAxisSize: MainAxisSize.min, children: [
-              // Gradient header band.
-              Container(
-                height: 86,
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(20)),
-                  gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF5B4FE9), Color(0xFF9C6ADE)]),
-                ),
-              ),
-              // Room for the lower half of the overlapping avatar
-              // (avatar bottom at y=132) plus an 8px gap before the name.
-              const SizedBox(height: 54),
-            Text(name,
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            // Role badge.
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF5B4FE9).withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(tr('Super Admin'),
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                      color: Color(0xFF5B4FE9))),
-            ),
-            const SizedBox(height: 14),
-            _profileRow(
-                Icons.alternate_email,
-                tr('Username'),
-                admin.username.isNotEmpty ? admin.username : '—'),
-            _profileRow(Icons.mail_outline, tr('Email'),
-                admin.email.isNotEmpty ? admin.email : '—'),
-            _profileRow(Icons.phone_outlined, tr('Phone'),
-                admin.phone.isNotEmpty ? admin.phone : '—'),
-            _profileRow(
-                Icons.badge_outlined, tr('User ID'), admin.id.toString()),
-            const Divider(height: 20),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    icon: const Icon(Icons.close, size: 18),
-                    label: Text(tr('Cancel')),
+          backgroundColor: sch.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            // ONE Stack holds the whole card so the avatar AND its camera
+            // badge stay inside the Stack's hit-test bounds: Flutter renders
+            // children painted outside a Stack (Clip.none) but never delivers
+            // taps there — which is why the badge was not clickable before.
+            child: Stack(alignment: Alignment.topCenter, children: [
+              Column(mainAxisSize: MainAxisSize.min, children: [
+                // Gradient header band.
+                Container(
+                  height: 86,
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                    gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF5B4FE9), Color(0xFF9C6ADE)]),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFE5484D),
-                        foregroundColor: Colors.white),
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      _logout();
-                    },
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: Text(tr('Logout')),
+                // Room for the lower half of the overlapping avatar
+                // (avatar bottom at y=132) plus an 8px gap before the name.
+                const SizedBox(height: 54),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                // Role badge.
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5B4FE9).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
                   ),
+                  child: Text(tr('Super Admin'),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                          color: Color(0xFF5B4FE9))),
+                ),
+                const SizedBox(height: 14),
+                _profileRow(Icons.alternate_email, tr('Username'),
+                    admin.username.isNotEmpty ? admin.username : '—'),
+                _profileRow(Icons.mail_outline, tr('Email'),
+                    admin.email.isNotEmpty ? admin.email : '—'),
+                _profileRow(Icons.phone_outlined, tr('Phone'),
+                    admin.phone.isNotEmpty ? admin.phone : '—'),
+                _profileRow(
+                    Icons.badge_outlined, tr('User ID'), admin.id.toString()),
+                const Divider(height: 20),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: Text(tr('Cancel')),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFE5484D),
+                            foregroundColor: Colors.white),
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _logout();
+                        },
+                        icon: const Icon(Icons.logout, size: 18),
+                        label: Text(tr('Logout')),
+                      ),
+                    ),
+                  ]),
                 ),
               ]),
-            ),
-            ]),
-            // Avatar straddling the header edge — positioned INSIDE the
-            // card Stack's bounds (top: 48 = 86 header - 38 half avatar)
-            // so taps reach it. The 84x84 box leaves room at the edge for
-            // the badge, keeping every pixel of it clickable.
-            Positioned(
-              top: 48,
-              child: SizedBox(
-                width: 84,
-                height: 84,
-                child: Stack(alignment: Alignment.center, children: [
-                  // Tapping the big avatar also opens the change-photo
-                  // sheet (bigger target than the badge alone).
-                  GestureDetector(
-                    onTap: () => _changePhoto(setDialogState),
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _adminAvatarImage == null
-                            ? null
-                            : sch.primaryContainer,
-                        gradient: _adminAvatarImage == null
-                            ? const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                    Color(0xFF5B4FE9),
-                                    Color(0xFF9C6ADE)
-                                  ])
-                            : null,
-                        image: _adminAvatarImage != null
-                            ? DecorationImage(
-                                image: _adminAvatarImage!,
-                                fit: BoxFit.cover)
-                            : null,
-                        border: Border.all(color: sch.surface, width: 3),
-                      ),
-                      alignment: Alignment.center,
-                      child: _adminAvatarImage == null
-                          ? Text(name.substring(0, 1).toUpperCase(),
-                              style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white))
-                          : null,
-                    ),
-                  ),
-                  // Camera badge = change the photo. Sits at the edge of
-                  // the 84x84 box, fully inside hit-test bounds.
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: InkWell(
+              // Avatar straddling the header edge — positioned INSIDE the
+              // card Stack's bounds (top: 48 = 86 header - 38 half avatar)
+              // so taps reach it. The 84x84 box leaves room at the edge for
+              // the badge, keeping every pixel of it clickable.
+              Positioned(
+                top: 48,
+                child: SizedBox(
+                  width: 84,
+                  height: 84,
+                  child: Stack(alignment: Alignment.center, children: [
+                    // Tapping the big avatar also opens the change-photo
+                    // sheet (bigger target than the badge alone).
+                    GestureDetector(
                       onTap: () => _changePhoto(setDialogState),
-                      customBorder: const CircleBorder(),
                       child: Container(
-                        padding: const EdgeInsets.all(5),
+                        width: 76,
+                        height: 76,
                         decoration: BoxDecoration(
-                          color: sch.primary,
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: sch.surface, width: 2),
+                          color: _adminAvatarImage == null
+                              ? null
+                              : sch.primaryContainer,
+                          gradient: _adminAvatarImage == null
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                      Color(0xFF5B4FE9),
+                                      Color(0xFF9C6ADE)
+                                    ])
+                              : null,
+                          image: _adminAvatarImage != null
+                              ? DecorationImage(
+                                  image: _adminAvatarImage!, fit: BoxFit.cover)
+                              : null,
+                          border: Border.all(color: sch.surface, width: 3),
                         ),
-                        child: const Icon(Icons.photo_camera,
-                            size: 13, color: Colors.white),
+                        alignment: Alignment.center,
+                        child: _adminAvatarImage == null
+                            ? Text(name.substring(0, 1).toUpperCase(),
+                                style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white))
+                            : null,
                       ),
                     ),
-                  ),
-                ]),
+                    // Camera badge = change the photo. Sits at the edge of
+                    // the 84x84 box, fully inside hit-test bounds.
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: InkWell(
+                        onTap: () => _changePhoto(setDialogState),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: sch.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: sch.surface, width: 2),
+                          ),
+                          child: const Icon(Icons.photo_camera,
+                              size: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
               ),
-            ),
-          ]),
-        ),
+            ]),
+          ),
         );
       }),
     );
@@ -722,12 +908,11 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         SizedBox(
             width: 84,
             child: Text(label,
-                style:
-                    TextStyle(fontSize: 12, color: sch.onSurfaceVariant))),
+                style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant))),
         Expanded(
           child: Text(value,
-              style: const TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600)),
+              style:
+                  const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -796,9 +981,10 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     // blob from a gallery pick).
     final current = _admin.image;
     final ctrl = TextEditingController(
-        text: current != null && current.isNotEmpty && !current.startsWith('b64:')
-            ? current
-            : '');
+        text:
+            current != null && current.isNotEmpty && !current.startsWith('b64:')
+                ? current
+                : '');
     final url = await showDialog<String>(
       context: context,
       builder: (dc) => AlertDialog(
@@ -810,8 +996,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(dc),
-              child: Text(tr('Cancel'))),
+              onPressed: () => Navigator.pop(dc), child: Text(tr('Cancel'))),
           TextButton(
               onPressed: () => Navigator.pop(dc, ctrl.text.trim()),
               child: Text(tr('OK'))),
@@ -837,7 +1022,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         image: image,
         token: a.token,
         isAdmin: a.isAdmin);
-    await AppSettings.saveProfile(u, forKey: AppSettings.profileKeyOf(widget.admin));
+    await AppSettings.saveProfile(u,
+        forKey: AppSettings.profileKeyOf(widget.admin));
     if (!mounted) return;
     setState(() {});
     setDialogState?.call(() {});
@@ -858,26 +1044,37 @@ class AdminPanelPageState extends State<AdminPanelPage> {
 
   // ------------------------------------------------------------------ body
 
+  /// Applies the selected Light/Dark theme to the whole panel via a local
+  /// [Theme] wrapper — so the color actually switches the moment `_dark`
+  /// flips, even if the app root's callback is ever missing.
+  ThemeData get _panelTheme => ThemeData(
+      useMaterial3: true,
+      colorScheme: _dark
+          ? adminDarkColorScheme
+          : ColorScheme.fromSeed(seedColor: Colors.blue));
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor:
-          Theme.of(context).colorScheme.surfaceContainerLowest,
-      body: Row(children: [
-        _sidebar(),
-        Expanded(
-          child: Column(children: [
-            _topBar(),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? _errorView()
-                      : _pageBody(),
-            ),
-          ]),
-        ),
-      ]),
+    return Theme(
+      data: _panelTheme,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+        body: Row(children: [
+          _sidebar(),
+          Expanded(
+            child: Column(children: [
+              _topBar(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? _errorView()
+                        : _pageBody(),
+              ),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -885,12 +1082,10 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final sch = Theme.of(context).colorScheme;
     final tr = AppLocalizations.of(context).t;
     return Center(
-      child:
-          Column(mainAxisSize: MainAxisSize.min, children: [
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.cloud_off, size: 56, color: sch.outline),
         const SizedBox(height: 12),
-        Text(tr('No connection'),
-            style: const TextStyle(fontSize: 16)),
+        Text(tr('No connection'), style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 8),
         FilledButton.icon(
             onPressed: _reload,
@@ -1007,7 +1202,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         return _selectedOrder != null
             ? OrderDetailPage(
                 order: _selectedOrder!,
-                onBack: () => setState(() => _selectedOrder = null))
+                onBack: () => setState(() => _selectedOrder = null),
+                onDelete: () => _deleteOrder(_selectedOrder!))
             : OrdersTablePage(
                 orders: _filteredOrders,
                 allOrders: _orders,
@@ -1021,10 +1217,14 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                 onOpen: (o) => setState(() => _selectedOrder = o),
                 onStatus: _changeStatus);
       case 'reports':
-      case 'notifications':
+        return ReportsPage(orders: _orders, products: _products, users: _users);
       case 'settings':
+        return AdminSettingsPage();
       case 'administration':
-        return _placeholder();
+        return AdministrationPage(
+            users: _users,
+            repo: widget.repo,
+            onUsersChanged: () => _onLiveUsers());
       case 'feedback':
         return FeedbackTablePage(
             feedbacks: _filteredFeedbacks,
@@ -1057,8 +1257,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final tr = AppLocalizations.of(context).t;
     return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.construction_outlined,
-          size: 54, color: sch.outline),
+      Icon(Icons.construction_outlined, size: 54, color: sch.outline),
       const SizedBox(height: 10),
       Text(tr('This page is coming soon'),
           style: TextStyle(color: sch.onSurfaceVariant)),
@@ -1104,8 +1303,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
             color: sch.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: sch.outlineVariant)),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(
               child: Text(title,
@@ -1116,14 +1315,12 @@ class AdminPanelPageState extends State<AdminPanelPage> {
               TextButton(
                   onPressed: onViewAll,
                   style: TextButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                   child: Text(tr('View All'),
                       style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFF5B4FE9)))),
+                          fontSize: 11.5, color: Color(0xFF5B4FE9)))),
           ]),
           const SizedBox(height: 6),
           ...children,
@@ -1176,6 +1373,18 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           value: '$inStock/${_products.length}',
           gradient: const [Color(0xFFF59E0B), Color(0xFFFBBF24)],
           onTap: () => _go('products')),
+      _KpiSpec(
+          icon: Icons.storefront_outlined,
+          title: tr('Shops'),
+          value: '${_products.length}',
+          gradient: const [Color(0xFF6366F1), Color(0xFF818CF8)],
+          onTap: () => _go('companies')),
+      _KpiSpec(
+          icon: Icons.category_outlined,
+          title: tr('Categories'),
+          value: '${_cats.length}',
+          gradient: const [Color(0xFFEC4899), Color(0xFFF472B6)],
+          onTap: () => _go('categories')),
     ];
 
     Widget kpiTile(_KpiSpec k) {
@@ -1212,16 +1421,14 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                       child: Text(k.value,
                           maxLines: 1,
                           style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.w800)),
+                              fontSize: 19, fontWeight: FontWeight.w800)),
                     ),
                     const SizedBox(height: 2),
                     Text(k.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: sch.onSurfaceVariant)),
+                            fontSize: 12, color: sch.onSurfaceVariant)),
                   ]),
             ),
           ]),
@@ -1251,8 +1458,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                                     fontWeight: FontWeight.w600))),
                         Text('$count',
                             style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700)),
+                                fontSize: 13, fontWeight: FontWeight.w700)),
                       ]),
                       const SizedBox(height: 6),
                       progress(statusColor(s), frac),
@@ -1296,25 +1502,21 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700)),
+                              fontSize: 13, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
                       Text('#$id  •  ${d.day}/${d.month}/${d.year}',
                           style: TextStyle(
-                              fontSize: 11,
-                              color: sch.onSurfaceVariant)),
+                              fontSize: 11, color: sch.onSurfaceVariant)),
                     ]),
               ),
               const SizedBox(width: 8),
-              Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('\$${o.total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 3),
-                    Pill(tr(o.status), color: statusColor(o.status)),
-                  ]),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('\$${o.total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Pill(tr(o.status), color: statusColor(o.status)),
+              ]),
             ])),
       );
     }
@@ -1325,13 +1527,11 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           recent.isEmpty
               ? [
                   Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
                       child: Center(
                           child: Text(tr('No orders yet'),
                               style: TextStyle(
-                                  fontSize: 12,
-                                  color: sch.onSurfaceVariant))))
+                                  fontSize: 12, color: sch.onSurfaceVariant))))
                 ]
               : recent.take(6).map(orderRow).toList(),
           onViewAll: () => _go('orders'));
@@ -1345,13 +1545,11 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           lowStock.isEmpty
               ? [
                   Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
                       child: Center(
                           child: Text(tr('All products in stock'),
                               style: TextStyle(
-                                  fontSize: 12,
-                                  color: sch.onSurfaceVariant))))
+                                  fontSize: 12, color: sch.onSurfaceVariant))))
                 ]
               : lowStock.take(5).map((p) {
                   final out = p.stock <= 0;
@@ -1366,11 +1564,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600))),
                         const SizedBox(width: 10),
-                        Pill(
-                            out ? tr('Out of stock') : '${p.stock}',
-                            color: out
-                                ? Colors.redAccent
-                                : Colors.orange),
+                        Pill(out ? tr('Out of stock') : '${p.stock}',
+                            color: out ? Colors.redAccent : Colors.orange),
                       ]));
                 }).toList(),
           onViewAll: () => _go('products'));
@@ -1393,13 +1588,11 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           topCats.isEmpty
               ? [
                   Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
                       child: Center(
                           child: Text(tr('No categories yet'),
                               style: TextStyle(
-                                  fontSize: 12,
-                                  color: sch.onSurfaceVariant))))
+                                  fontSize: 12, color: sch.onSurfaceVariant))))
                 ]
               : topCats.take(5).map((e) {
                   return Padding(
@@ -1414,16 +1607,14 @@ class AdminPanelPageState extends State<AdminPanelPage> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontSize: 12.5,
-                                          fontWeight:
-                                              FontWeight.w600))),
+                                          fontWeight: FontWeight.w600))),
                               Text('${e.value}',
                                   style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700)),
                             ]),
                             const SizedBox(height: 6),
-                            progress(const Color(0xFF5B4FE9),
-                                e.value / maxCat),
+                            progress(const Color(0xFF5B4FE9), e.value / maxCat),
                           ]));
                 }).toList(),
           onViewAll: () => _go('categories'));
@@ -1435,9 +1626,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       final wide = c.maxWidth >= 980;
       return SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           GridView.count(
             crossAxisCount: wide ? 4 : 2,
             shrinkWrap: true,
@@ -1483,17 +1673,16 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final saved = await showDialog<Product?>(
       context: context,
       barrierDismissible: false,
-      builder: (_) =>
-          AdminProductEditDialog(repo: widget.repo, existing: p),
+      builder: (_) => AdminProductEditDialog(repo: widget.repo, existing: p),
     );
     if (saved == null) return;
     _toast(p == null ? tr('Product added') : tr('Changes saved'));
     // Show the edit instantly, then persist (local-first) and reconcile
     // with the cloud in the background so the Save never blocks the UI.
     _applySavedProduct(saved);
-    unawaited((p == null
-            ? widget.repo.add(saved)
-            : widget.repo.update(saved))
+    AppSettings.logAdminActivity(
+        '${p == null ? 'Added' : 'Updated'} product "${saved.title}"');
+    unawaited((p == null ? widget.repo.add(saved) : widget.repo.update(saved))
         .then((_) => _refreshProducts())
         .catchError((_) {}));
   }
@@ -1505,17 +1694,16 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final saved = await showDialog<Product?>(
       context: context,
       barrierDismissible: false,
-      builder: (_) =>
-          AdminCompanyEditDialog(repo: widget.repo, existing: p),
+      builder: (_) => AdminCompanyEditDialog(repo: widget.repo, existing: p),
     );
     if (saved == null) return;
     _toast(p == null ? tr('Shop added') : tr('Changes saved'));
     // Show the edit instantly, then persist (local-first) and reconcile
     // with the cloud in the background so the Save never blocks the UI.
     _applySavedProduct(saved);
-    unawaited((p == null
-            ? widget.repo.add(saved)
-            : widget.repo.update(saved))
+    AppSettings.logAdminActivity(
+        '${p == null ? 'Added' : 'Updated'} shop "${saved.title}"');
+    unawaited((p == null ? widget.repo.add(saved) : widget.repo.update(saved))
         .then((_) => _refreshProducts())
         .catchError((_) {}));
   }
@@ -1525,6 +1713,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final ok = await _confirm('${tr('Delete')} "${p.title}"?');
     if (ok != true) return;
     await widget.repo.delete(p.id);
+    AppSettings.logAdminActivity('Deleted product "${p.title}"');
     _toast(tr('Product deleted'));
     _reload();
   }
@@ -1534,6 +1723,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final ok = await _confirm('${tr('Delete')} ${tr('Feedback')}?');
     if (ok != true) return;
     await widget.repo.deleteFeedback(f.id);
+    AppSettings.logAdminActivity('Deleted feedback from @${f.owner}');
     _toast(tr('Feedback deleted'));
     _reload();
   }
@@ -1556,6 +1746,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         slug: result.slug,
         description: result.description,
         image: result.image);
+    AppSettings.logAdminActivity('Added category "${result.name.trim()}"');
     _toast(tr('Category added'));
     _reload();
   }
@@ -1569,6 +1760,8 @@ class AdminPanelPageState extends State<AdminPanelPage> {
         slug: result.slug,
         description: result.description,
         image: result.image);
+    AppSettings.logAdminActivity(
+        'Updated category "${c.name}" → "${result.name.trim()}"');
 
     // Show the edit immediately on this row (before any network refresh),
     // using the exact same slug/url rules as ApiService.updateCategory.
@@ -1610,20 +1803,21 @@ class AdminPanelPageState extends State<AdminPanelPage> {
     final ok = await _confirm('${tr('Delete')} "${c.name}"?');
     if (ok != true) return;
     await widget.repo.deleteCategory(c);
+    AppSettings.logAdminActivity('Deleted category "${c.name}"');
     _toast(tr('Category deleted'));
     _reload();
   }
 
   Future<void> _deleteUser(User u) async {
     final tr = AppLocalizations.of(context).t;
-    if (u.username.trim().toLowerCase() ==
-        ApiService.adminUsername) {
+    if (u.username.trim().toLowerCase() == ApiService.adminUsername) {
       _toast(tr('Cannot delete the built-in admin account'));
       return;
     }
     final ok = await _confirm('${tr('Delete')} "@${u.username}"?');
     if (ok != true) return;
     await widget.repo.deleteUser(u.username);
+    AppSettings.logAdminActivity('Deleted user @${u.username}');
     // Drop the account from the in-memory list right away (no spinner),
     // then quietly reconcile with the cloud — the shopper's app is told
     // through the cloud delete (realtime / poll) to sign out by itself.
@@ -1634,14 +1828,57 @@ class AdminPanelPageState extends State<AdminPanelPage> {
 
   Future<void> _changeStatus(Order o, String status) async {
     final tr = AppLocalizations.of(context).t;
-    final ok = await widget.repo.setOrderStatus(o.id, status);
-    await widget.orders.setStatus(o.id, status);
+    // Show the new status in the table immediately while the cloud write
+    // runs, so the admin sees their choice instantly (the refresh after the
+    // write re-syncs the row from the database, reverting any failed write).
+    setState(() {
+      _orders = [
+        for (final x in _orders) x.id == o.id ? x.copyWith(status: status) : x,
+      ];
+    });
+    final ok = await widget.orders.setStatus(o.id, status);
     if (!ok) {
+      // The optimistic table value was not accepted by the database; restore
+      // the last confirmed status immediately instead of leaving a lie onscreen.
+      if (mounted) {
+        setState(() {
+          _orders = [
+            for (final x in _orders)
+              x.id == o.id ? x.copyWith(status: o.status) : x,
+          ];
+        });
+      }
       _toast(tr('Could not reach the cloud. Status not saved.'));
     } else {
+      AppSettings.logAdminActivity('Changed order ${o.id} to $status');
       _toast(tr('Order status updated'));
     }
-    _reload();
+    // Re-sync the whole list from the database so the table always shows
+    // exactly what the cloud holds (single source of truth).
+    await _reload();
+  }
+
+  /// Admin deletes an order: removes the row from the shared cloud so the
+  /// shopper's Order History on every device stops showing it too.
+  Future<void> _deleteOrder(Order o) async {
+    final tr = AppLocalizations.of(context).t;
+    final confirmed = await _confirm(
+        '${tr('Delete')} ${tr('Order')} #${o.id.length > 8 ? o.id.substring(0, 8) : o.id}?');
+    if (confirmed != true || !mounted) return;
+    final deleted = await widget.repo.deleteOrder(o.id);
+    if (deleted) {
+      await widget.orders.remove(o.id);
+      AppSettings.logAdminActivity('Deleted order ${o.id}');
+      if (!mounted) return;
+      setState(() {
+        _selectedOrder = null;
+        _orders = _orders.where((x) => x.id != o.id).toList();
+      });
+      _toast(tr('Order deleted'));
+      _reload();
+    } else {
+      _toast(tr('Could not reach the cloud. Order not deleted.'));
+    }
   }
 
   Future<bool?> _confirm(String message) {
@@ -1657,8 +1894,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
               child: Text(tr('Cancel'))),
           FilledButton(
               style: FilledButton.styleFrom(
-                  backgroundColor:
-                      Theme.of(dc).colorScheme.error),
+                  backgroundColor: Theme.of(dc).colorScheme.error),
               onPressed: () => Navigator.pop(dc, true),
               child: Text(tr('Delete'))),
         ],
@@ -1764,8 +2000,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
       suffixIcon: suffix,
       filled: true,
       fillColor: sch.surfaceContainerLowest,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: border(sch.outlineVariant, 1),
       focusedBorder: border(const Color(0xFF5B4FE9), 1.8),
       border: border(sch.outlineVariant, 1),
@@ -1824,8 +2059,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: sch.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
@@ -1849,9 +2083,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(14)),
                   child: Icon(
-                      _isEdit
-                          ? Icons.edit_outlined
-                          : Icons.category_outlined,
+                      _isEdit ? Icons.edit_outlined : Icons.category_outlined,
                       color: Colors.white,
                       size: 24),
                 ),
@@ -1860,10 +2092,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                            _isEdit
-                                ? tr('Edit Category')
-                                : tr('Add Category'),
+                        Text(_isEdit ? tr('Edit Category') : tr('Add Category'),
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -1896,10 +2125,9 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                             icon: Icons.label_outline,
                             hint: tr('e.g. Beauty & Skincare'),
                           ),
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? tr('Please enter a name')
-                                  : null),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? tr('Please enter a name')
+                              : null),
                       const SizedBox(height: 16),
                       _label(tr('Slug')),
                       TextFormField(
@@ -1947,14 +2175,13 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(children: [
-                Icon(Icons.info_outline,
-                    size: 14, color: sch.onSurfaceVariant),
+                Icon(Icons.info_outline, size: 14, color: sch.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                       tr('Only the name is required — the rest is optional.'),
-                      style: TextStyle(
-                          fontSize: 11, color: sch.onSurfaceVariant)),
+                      style:
+                          TextStyle(fontSize: 11, color: sch.onSurfaceVariant)),
                 ),
               ]),
             ),
@@ -1981,8 +2208,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14)),
-                    icon: Icon(
-                        _isEdit ? Icons.check : Icons.add, size: 18),
+                    icon: Icon(_isEdit ? Icons.check : Icons.add, size: 18),
                     label: Text(_isEdit ? tr('Save') : tr('Add')),
                   ),
                 ),
@@ -2069,8 +2295,8 @@ class AdminTableScaffold extends StatelessWidget {
               style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF5B4FE9),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 14)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
               icon: const Icon(Icons.add, size: 18),
               label: Text(actionLabel!)),
         ],
@@ -2087,25 +2313,22 @@ class AdminTableScaffold extends StatelessWidget {
           if (rows.isEmpty)
             Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text('No records found',
-                    style:
-                        TextStyle(color: sch.onSurfaceVariant))),
+                child: Text(AppLocalizations.of(context).t('No records found'),
+                    style: TextStyle(color: sch.onSurfaceVariant))),
           ...rows,
         ]),
       ),
       const SizedBox(height: 12),
       Row(children: [
         Text(showingLabel(page * rowsPerPageConst, rows.length),
-            style: TextStyle(
-                fontSize: 13, color: sch.onSurfaceVariant)),
+            style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
         const Spacer(),
         IconButton(
             onPressed: page > 0 ? () => onPage(page - 1) : null,
             icon: const Icon(Icons.chevron_left)),
         _pageChip(context, page + 1, active: true),
         IconButton(
-            onPressed:
-                page < totalPages - 1 ? () => onPage(page + 1) : null,
+            onPressed: page < totalPages - 1 ? () => onPage(page + 1) : null,
             icon: const Icon(Icons.chevron_right)),
       ]),
     ]);
@@ -2116,19 +2339,18 @@ class AdminTableScaffold extends StatelessWidget {
   static Widget _pageChip(BuildContext c, int n, {bool active = false}) {
     final sch = Theme.of(c).colorScheme;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-          color: active ? const Color(0xFF5B4FE9) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8)),
-      constraints:
-          const BoxConstraints(minWidth: 34, minHeight: 34),
-      alignment: Alignment.center,
-      child: Text('$n',
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: active ? Colors.white : sch.onSurface)));
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+            color: active ? const Color(0xFF5B4FE9) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8)),
+        constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+        alignment: Alignment.center,
+        child: Text('$n',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: active ? Colors.white : sch.onSurface)));
   }
 }
 
@@ -2139,10 +2361,7 @@ class CellText extends StatelessWidget {
   final Color? color;
   final int maxLines;
   const CellText(this.text,
-      {super.key,
-      this.header = false,
-      this.color,
-      this.maxLines = 1});
+      {super.key, this.header = false, this.color, this.maxLines = 1});
   @override
   Widget build(BuildContext context) {
     final sch = Theme.of(context).colorScheme;
@@ -2170,16 +2389,13 @@ class Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999)),
-      child: Text(text,
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color)));
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999)),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: color)));
   }
 }
 
@@ -2212,28 +2428,20 @@ class CompaniesTablePage extends StatelessWidget {
     final sch = Theme.of(context).colorScheme;
     final tr = AppLocalizations.of(context).t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (products.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        products.skip(page * perPage).take(perPage).toList();
+    final totalPages = (products.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = products.skip(page * perPage).take(perPage).toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
-          Expanded(
-              flex: 4, child: CellText(tr('Shop'), header: true)),
-          Expanded(
-              flex: 3, child: CellText(tr('Location'), header: true)),
-          Expanded(
-              flex: 4, child: CellText(tr('Website'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Verified'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Status'), header: true)),
+          Expanded(flex: 4, child: CellText(tr('Shop'), header: true)),
+          Expanded(flex: 3, child: CellText(tr('Location'), header: true)),
+          Expanded(flex: 4, child: CellText(tr('Website'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Verified'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Status'), header: true)),
           Expanded(
               flex: 2,
-              child: Center(
-                  child: CellText(tr('Actions'), header: true))),
+              child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Product p) {
@@ -2252,54 +2460,40 @@ class CompaniesTablePage extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                             color: sch.primaryContainer,
-                            borderRadius:
-                                BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(8)),
                         child: Text(
                             name.isNotEmpty
-                                ? name
-                                    .substring(0, 1)
-                                    .toUpperCase()
+                                ? name.substring(0, 1).toUpperCase()
                                 : '?',
                             style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color:
-                                    sch.onPrimaryContainer))),
+                                color: sch.onPrimaryContainer))),
                     const SizedBox(width: 10),
                     Expanded(
                         child: Tooltip(
-                          message: p.description.isNotEmpty
-                              ? p.description
-                              : name,
-                          child: CellText(name,
-                              color: const Color(0xFF5B4FE9)))),
+                            message:
+                                p.description.isNotEmpty ? p.description : name,
+                            child: CellText(name,
+                                color: const Color(0xFF5B4FE9)))),
                   ])),
               Expanded(
                   flex: 3,
-                  child: CellText(p.category.isEmpty
-                      ? '—'
-                      : p.category)),
+                  child: CellText(p.category.isEmpty ? '—' : p.category)),
               Expanded(
                   flex: 4,
-                  child: CellText(p.thumbnail.isEmpty
-                      ? '—'
-                      : p.thumbnail,
+                  child: CellText(p.thumbnail.isEmpty ? '—' : p.thumbnail,
                       color: const Color(0xFF5B4FE9))),
               Expanded(
                   flex: 2,
-                  child: Pill(
-                      p.verified
-                          ? tr('Verified')
-                          : tr('Unverified'),
-                      color: p.verified
-                          ? Colors.green
-                          : Colors.orange)),
+                  child: Pill(p.verified ? tr('Verified') : tr('Unverified'),
+                      color: p.verified ? Colors.green : Colors.orange)),
               Expanded(
                   flex: 2,
-                  child: Pill(tr(p.status == 'Inactive' ? 'Inactive' : 'Active'),
-                      color: p.status == 'Inactive'
-                          ? Colors.grey
-                          : Colors.green)),
+                  child: Pill(
+                      tr(p.status == 'Inactive' ? 'Inactive' : 'Active'),
+                      color:
+                          p.status == 'Inactive' ? Colors.grey : Colors.green)),
               // Edit / Delete actions for this shop row (centered so the
               // Actions header sits directly above both buttons).
               Expanded(
@@ -2336,7 +2530,7 @@ class CompaniesTablePage extends StatelessWidget {
       totalPages: totalPages,
       onPage: onPage,
       showingLabel: (start, n) =>
-          'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+          tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
@@ -2373,22 +2567,19 @@ class CategoriesTablePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = AppLocalizations.of(context).t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (cats.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        cats.skip(page * perPage).take(perPage).toList();
+    final totalPages = (cats.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = cats.skip(page * perPage).take(perPage).toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
           Expanded(flex: 3, child: CellText(tr('Name'), header: true)),
-          Expanded(flex: 2, child: CellText('Slug', header: true)),
+          Expanded(flex: 2, child: CellText(tr('Slug'), header: true)),
           Expanded(flex: 4, child: CellText(tr('Description'), header: true)),
-          Expanded(flex: 3, child: CellText('URL', header: true)),
+          Expanded(flex: 3, child: CellText(tr('URL'), header: true)),
           Expanded(
               flex: 2,
-              child: Center(
-                  child: CellText(tr('Actions'), header: true))),
+              child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Category cat) {
@@ -2411,9 +2602,7 @@ class CategoriesTablePage extends StatelessWidget {
                     height: 30,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: cat.image.isEmpty
-                            ? sch.primaryContainer
-                            : null,
+                        color: cat.image.isEmpty ? sch.primaryContainer : null,
                         image: cat.image.isEmpty
                             ? null
                             : DecorationImage(
@@ -2423,9 +2612,7 @@ class CategoriesTablePage extends StatelessWidget {
                     child: cat.image.isEmpty
                         ? Text(
                             cat.name.isNotEmpty
-                                ? cat.name
-                                    .substring(0, 1)
-                                    .toUpperCase()
+                                ? cat.name.substring(0, 1).toUpperCase()
                                 : '?',
                             style: TextStyle(
                                 fontSize: 13,
@@ -2437,34 +2624,30 @@ class CategoriesTablePage extends StatelessWidget {
               ])),
           Expanded(
               flex: 2,
-              child: CellText(cat.slug,
-                  color: const Color(0xFF5B4FE9))),
+              child: CellText(cat.slug, color: const Color(0xFF5B4FE9))),
           Expanded(
               flex: 4,
-              child: CellText(
-                  cat.description.isEmpty ? '—' : cat.description,
+              child: CellText(cat.description.isEmpty ? '—' : cat.description,
                   maxLines: 2)),
           Expanded(flex: 3, child: CellText(cat.url)),
           // Edit / Delete actions for this category row (centered so the
           // Actions header sits directly above both buttons).
           Expanded(
               flex: 2,
-              child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                        tooltip: tr('Edit'),
-                        onPressed: () => onEdit(cat),
-                        icon: const Icon(Icons.edit_outlined,
-                            size: 20, color: Color(0xFF5B4FE9))),
-                    const SizedBox(width: 6),
-                    IconButton(
-                        tooltip: tr('Delete'),
-                        onPressed: () => onDelete(cat),
-                        icon: const Icon(Icons.delete_outline,
-                            size: 20,
-                            color: Colors.redAccent)),
-                  ])),
+              child:
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                IconButton(
+                    tooltip: tr('Edit'),
+                    onPressed: () => onEdit(cat),
+                    icon: const Icon(Icons.edit_outlined,
+                        size: 20, color: Color(0xFF5B4FE9))),
+                const SizedBox(width: 6),
+                IconButton(
+                    tooltip: tr('Delete'),
+                    onPressed: () => onDelete(cat),
+                    icon: const Icon(Icons.delete_outline,
+                        size: 20, color: Colors.redAccent)),
+              ])),
         ]),
       );
     }
@@ -2478,7 +2661,7 @@ class CategoriesTablePage extends StatelessWidget {
       totalPages: totalPages,
       onPage: onPage,
       showingLabel: (start, n) =>
-          'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+          tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
@@ -2513,30 +2696,21 @@ class ProductsTablePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = AppLocalizations.of(context).t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (products.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        products.skip(page * perPage).take(perPage).toList();
+    final totalPages = (products.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = products.skip(page * perPage).take(perPage).toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
           Expanded(flex: 4, child: CellText(tr('Name'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Brand'), header: true)),
-          Expanded(
-              flex: 2,
-              child: CellText(tr('Categories'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Price'), header: true)),
-          Expanded(
-              flex: 1, child: CellText(tr('Stock'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Rating'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Brand'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Categories'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Price'), header: true)),
+          Expanded(flex: 1, child: CellText(tr('Stock'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Rating'), header: true)),
           Expanded(
               flex: 2,
-              child: Center(
-                  child: CellText(tr('Actions'), header: true))),
+              child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(Product p) => InkWell(
@@ -2546,17 +2720,13 @@ class ProductsTablePage extends StatelessWidget {
               child: Row(children: [
                 Expanded(
                     flex: 4,
-                    child: CellText(p.title,
-                        color: const Color(0xFF5B4FE9))),
+                    child: CellText(p.title, color: const Color(0xFF5B4FE9))),
                 Expanded(
-                    flex: 2,
-                    child: CellText(
-                        p.brand.isEmpty ? '—' : p.brand)),
+                    flex: 2, child: CellText(p.brand.isEmpty ? '—' : p.brand)),
                 Expanded(flex: 2, child: CellText(p.category)),
                 Expanded(
                     flex: 2,
-                    child: CellText(
-                        '\$${p.price.toStringAsFixed(2)}')),
+                    child: CellText('\$${p.price.toStringAsFixed(2)}')),
                 Expanded(
                     flex: 1,
                     child: Pill('${p.stock}',
@@ -2568,8 +2738,7 @@ class ProductsTablePage extends StatelessWidget {
                 Expanded(
                     flex: 2,
                     child: Row(children: [
-                      const Icon(Icons.star,
-                          size: 14, color: Colors.amber),
+                      const Icon(Icons.star, size: 14, color: Colors.amber),
                       const SizedBox(width: 4),
                       CellText(p.rating.toStringAsFixed(1)),
                     ])),
@@ -2608,7 +2777,7 @@ class ProductsTablePage extends StatelessWidget {
       totalPages: totalPages,
       onPage: onPage,
       showingLabel: (start, n) =>
-          'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+          tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
@@ -2641,33 +2810,25 @@ class UsersTablePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = AppLocalizations.of(context).t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (users.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        users.skip(page * perPage).take(perPage).toList();
+    final totalPages = (users.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = users.skip(page * perPage).take(perPage).toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
           Expanded(flex: 3, child: CellText(tr('Name'), header: true)),
-          Expanded(
-              flex: 3,
-              child: CellText(tr('Username'), header: true)),
-          Expanded(
-              flex: 4, child: CellText(tr('Email'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Phone'), header: true)),
-          Expanded(flex: 2, child: CellText('Role', header: true)),
+          Expanded(flex: 3, child: CellText(tr('Username'), header: true)),
+          Expanded(flex: 4, child: CellText(tr('Email'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Phone'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Role'), header: true)),
           Expanded(
               flex: 1,
-              child: Center(
-                  child: CellText(tr('Actions'), header: true))),
+              child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(User u) {
       final isAdmin = u.isAdmin ||
-          u.username.trim().toLowerCase() ==
-              ApiService.adminUsername;
+          u.username.trim().toLowerCase() == ApiService.adminUsername;
       return InkWell(
         onTap: () => onOpen(u),
         child: Padding(
@@ -2679,58 +2840,50 @@ class UsersTablePage extends StatelessWidget {
                     CircleAvatar(
                         radius: 14,
                         backgroundColor: isAdmin
-                            ? const Color(0xFF5B4FE9)
-                                .withValues(alpha: 0.15)
-                            : Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
+                            ? const Color(0xFF5B4FE9).withValues(alpha: 0.15)
+                            : Theme.of(context).colorScheme.secondaryContainer,
                         child: Text(
                             u.fullName.isNotEmpty
-                                ? u.fullName
-                                    .substring(0, 1)
-                                    .toUpperCase()
+                                ? u.fullName.substring(0, 1).toUpperCase()
                                 : '?',
                             style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color:
-                                    Color(0xFF5B4FE9)))),
+                                color: Color(0xFF5B4FE9)))),
                     const SizedBox(width: 10),
                     Expanded(
                         child: CellText(u.fullName.isEmpty
                             ? '@${u.username}'
                             : u.fullName)),
                   ])),
+              Expanded(flex: 3, child: CellText('@${u.username}')),
               Expanded(
-                  flex: 3, child: CellText('@${u.username}')),
+                  flex: 4, child: CellText(u.email.isEmpty ? '—' : u.email)),
               Expanded(
-                  flex: 4,
-                  child: CellText(
-                      u.email.isEmpty ? '—' : u.email)),
-              Expanded(
-                  flex: 2,
-                  child: CellText(
-                      u.phone.isEmpty ? '—' : u.phone)),
+                  flex: 2, child: CellText(u.phone.isEmpty ? '—' : u.phone)),
               Expanded(
                   flex: 2,
                   child: Pill(isAdmin ? tr('Admin') : tr('User'),
-                      color: isAdmin
-                          ? const Color(0xFF5B4FE9)
-                          : Colors.green)),
+                      color: isAdmin ? const Color(0xFF5B4FE9) : Colors.green)),
               Expanded(
                   flex: 1,
                   child: Align(
                       alignment: Alignment.center,
-                      child: isAdmin
-                          ? const SizedBox()
-                          : IconButton(
-                              tooltip: tr('Delete'),
-                              onPressed: () => onDelete(u),
-                              icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 20,
-                                  color:
-                                      Colors.redAccent)))),
+                      child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                                tooltip: tr('View detail'),
+                                onPressed: () => onOpen(u),
+                                icon: const Icon(Icons.visibility_outlined,
+                                    size: 20)),
+                            if (!isAdmin)
+                              IconButton(
+                                  tooltip: tr('Delete'),
+                                  onPressed: () => onDelete(u),
+                                  icon: const Icon(Icons.delete_outline,
+                                      size: 20, color: Colors.redAccent)),
+                          ]))),
             ])),
       );
     }
@@ -2742,7 +2895,7 @@ class UsersTablePage extends StatelessWidget {
       totalPages: totalPages,
       onPage: onPage,
       showingLabel: (start, n) =>
-          'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+          tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
@@ -2752,28 +2905,31 @@ class UsersTablePage extends StatelessWidget {
 class UserDetailPage extends StatelessWidget {
   final User user;
   final VoidCallback onBack;
-  const UserDetailPage(
-      {super.key, required this.user, required this.onBack});
+  const UserDetailPage({super.key, required this.user, required this.onBack});
 
   @override
   Widget build(BuildContext context) {
     final sch = Theme.of(context).colorScheme;
     final tr = AppLocalizations.of(context).t;
+    final isAdmin = user.isAdmin ||
+        user.username.trim().toLowerCase() == ApiService.adminUsername;
     Widget row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(children: [
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 110, child: CellText(k, header: true)),
-          Expanded(child: CellText(v.isEmpty ? '—' : v)),
+          Expanded(child: CellText(v.isEmpty ? '—' : v, maxLines: 3)),
         ]));
     return ListView(padding: const EdgeInsets.all(20), children: [
       Row(children: [
-        IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back)),
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
         const SizedBox(width: 8),
-        Text(tr('User'),
-            style: const TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w700)),
+        Expanded(
+          child: Text(user.fullName.isEmpty
+              ? '@${user.username}'
+              : user.fullName,
+              style:
+                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+        ),
       ]),
       const SizedBox(height: 12),
       Container(
@@ -2781,33 +2937,29 @@ class UserDetailPage extends StatelessWidget {
         decoration: BoxDecoration(
             color: sch.surface,
             borderRadius: BorderRadius.circular(14),
-            border:
-                Border.all(color: sch.outlineVariant)),
-        child: Column(children: [
-          CircleAvatar(
-              radius: 30,
-              backgroundColor: sch.primaryContainer,
-              child: Text(
-                  user.fullName.isNotEmpty
-                      ? user.fullName
-                          .substring(0, 1)
-                          .toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: sch.onPrimaryContainer))),
+            border: Border.all(color: sch.outlineVariant)),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Align(
+              alignment: Alignment.center,
+              child: CircleAvatar(
+                  radius: 30,
+                  backgroundColor: isAdmin
+                      ? const Color(0xFF5B4FE9).withValues(alpha: 0.15)
+                      : sch.secondaryContainer,
+                  child: Text(
+                      user.fullName.isNotEmpty
+                          ? user.fullName.substring(0, 1).toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: isAdmin
+                              ? const Color(0xFF5B4FE9)
+                              : sch.onSecondaryContainer)))),
           const SizedBox(height: 10),
-          Text(
-              user.fullName.isEmpty
-                  ? '@${user.username}'
-                  : user.fullName,
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w800)),
           Text('@${user.username}',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: sch.onSurfaceVariant)),
+              style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
           const Divider(height: 28),
           row(tr('Username'), user.username),
           row(tr('Email'), user.email),
@@ -2889,10 +3041,8 @@ class OrdersTablePage extends StatelessWidget {
     final sch = Theme.of(context).colorScheme;
     final tr = AppLocalizations.of(context).t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (orders.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        orders.skip(page * perPage).take(perPage).toList();
+    final totalPages = (orders.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = orders.skip(page * perPage).take(perPage).toList();
     // Known statuses, plus any status already present in the data so the
     // DropdownButton always has an item matching each order (otherwise it
     // asserts with "There should be exactly one item" and blanks the page).
@@ -2907,16 +3057,12 @@ class OrdersTablePage extends StatelessWidget {
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
-          Expanded(
-              flex: 2, child: CellText(tr('Order ID'), header: true)),
-          Expanded(
-              flex: 3, child: CellText(tr('Customer'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Order ID'), header: true)),
+          Expanded(flex: 3, child: CellText(tr('Customer'), header: true)),
           Expanded(flex: 2, child: CellText(tr('Date'), header: true)),
           Expanded(flex: 2, child: CellText(tr('Total'), header: true)),
-          Expanded(flex: 2, child: CellText('Status', header: true)),
-          Expanded(
-              flex: 2,
-              child: CellText(tr('Update status'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Status'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Update status'), header: true)),
         ]));
 
     // ---------------------------------------------- summary stat cards
@@ -2941,14 +3087,14 @@ class OrdersTablePage extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(value,
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w800)),
-                      Text(label,
-                          style: TextStyle(
-                              fontSize: 11, color: sch.onSurfaceVariant),
-                          overflow: TextOverflow.ellipsis),
-                    ])),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  Text(label,
+                      style:
+                          TextStyle(fontSize: 11, color: sch.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis),
+                ])),
           ]),
         ),
       );
@@ -2959,8 +3105,7 @@ class OrdersTablePage extends StatelessWidget {
 
     Widget row(Order o) {
       final date = o.date.toLocal().toString();
-      final itemsCount =
-          o.items.fold<int>(0, (sum, it) => sum + it.quantity);
+      final itemsCount = o.items.fold<int>(0, (sum, it) => sum + it.quantity);
       return InkWell(
         onTap: () => onOpen(o),
         borderRadius: BorderRadius.circular(12),
@@ -2977,10 +3122,9 @@ class OrdersTablePage extends StatelessWidget {
                             '#${o.id.length > 8 ? o.id.substring(0, 8) : o.id}',
                             color: const Color(0xFF5B4FE9)),
                         const SizedBox(height: 2),
-                        Text('$itemsCount items',
+                        Text(tr('$itemsCount items'),
                             style: TextStyle(
-                                fontSize: 10,
-                                color: sch.onSurfaceVariant)),
+                                fontSize: 10, color: sch.onSurfaceVariant)),
                       ])),
               // Customer avatar + name.
               Expanded(
@@ -3002,17 +3146,12 @@ class OrdersTablePage extends StatelessWidget {
                                 color: sch.onPrimaryContainer))),
                     const SizedBox(width: 10),
                     Expanded(
-                        child: CellText(o.owner.isEmpty
-                            ? tr('Guest')
-                            : o.owner)),
+                        child:
+                            CellText(o.owner.isEmpty ? tr('Guest') : o.owner)),
                   ])),
+              Expanded(flex: 2, child: CellText(date.split(' ').first)),
               Expanded(
-                  flex: 2,
-                  child: CellText(date.split(' ').first)),
-              Expanded(
-                  flex: 2,
-                  child: CellText(
-                      '\$${o.total.toStringAsFixed(2)}')),
+                  flex: 2, child: CellText('\$${o.total.toStringAsFixed(2)}')),
               // Colored status pill with icon.
               Expanded(
                   flex: 2,
@@ -3023,55 +3162,42 @@ class OrdersTablePage extends StatelessWidget {
                               horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                               color: _statusBg(o.status),
-                              borderRadius:
-                                  BorderRadius.circular(20)),
-                          child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(_statusIcon(o.status),
-                                    size: 13,
-                                    color: _statusColor(o.status)),
-                                const SizedBox(width: 5),
-                                Text(o.status,
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: _statusColor(
-                                            o.status))),
-                              ])))),
+                              borderRadius: BorderRadius.circular(20)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(_statusIcon(o.status),
+                                size: 13, color: _statusColor(o.status)),
+                            const SizedBox(width: 5),
+                            Text(tr(o.status),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: _statusColor(o.status))),
+                          ])))),
               Expanded(
                   flex: 2,
                   child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                          border: Border.all(
-                              color: sch.outlineVariant),
-                          borderRadius:
-                              BorderRadius.circular(10)),
+                          border: Border.all(color: sch.outlineVariant),
+                          borderRadius: BorderRadius.circular(10)),
                       child: DropdownButton<String>(
                           value: o.status,
                           isExpanded: true,
-                          underline:
-                              const SizedBox.shrink(),
+                          underline: const SizedBox.shrink(),
                           icon: Icon(Icons.expand_more,
-                              size: 18,
-                              color: sch.onSurfaceVariant),
+                              size: 18, color: sch.onSurfaceVariant),
                           items: statuses
                               .map((s) => DropdownMenuItem(
                                   value: s,
                                   child: Row(children: [
                                     Icon(_statusIcon(s),
-                                        size: 14,
-                                        color: _statusColor(s)),
+                                        size: 14, color: _statusColor(s)),
                                     const SizedBox(width: 6),
-                                    Text(s,
-                                        style: const TextStyle(
-                                            fontSize: 12)),
+                                    Text(tr(s),
+                                        style: const TextStyle(fontSize: 12)),
                                   ])))
                               .toList(),
-                          onChanged: (s) => s != null &&
-                                  s != o.status
+                          onChanged: (s) => s != null && s != o.status
                               ? onStatus(o, s)
                               : null))),
             ])),
@@ -3090,11 +3216,8 @@ class OrdersTablePage extends StatelessWidget {
           statCard(tr('Total Orders'), '${allOrders.length}',
               Icons.receipt_long_outlined, const Color(0xFF5B4FE9)),
           const SizedBox(width: 12),
-          statCard(
-              tr('Revenue'),
-              '\$${revenue.toStringAsFixed(2)}',
-              Icons.payments_outlined,
-              const Color(0xFF15803D)),
+          statCard(tr('Revenue'), '\$${revenue.toStringAsFixed(2)}',
+              Icons.payments_outlined, const Color(0xFF15803D)),
           const SizedBox(width: 12),
           statCard(
               tr('Processing'),
@@ -3131,7 +3254,7 @@ class OrdersTablePage extends StatelessWidget {
           totalPages: totalPages,
           onPage: onPage,
           showingLabel: (start, n) =>
-              'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+              tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
           header: headerRow(),
           rows: slice.map(row).toList(),
         ),
@@ -3143,8 +3266,11 @@ class OrdersTablePage extends StatelessWidget {
 class OrderDetailPage extends StatelessWidget {
   final Order order;
   final VoidCallback onBack;
+
+  /// Called when the admin deletes this order (optional — hides the button).
+  final VoidCallback? onDelete;
   const OrderDetailPage(
-      {super.key, required this.order, required this.onBack});
+      {super.key, required this.order, required this.onBack, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -3152,23 +3278,24 @@ class OrderDetailPage extends StatelessWidget {
     final tr = AppLocalizations.of(context).t;
     Widget row(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                  width: 100,
-                  child: CellText(k, header: true)),
-              Expanded(child: CellText(v, maxLines: 3)),
-            ]));
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 100, child: CellText(k, header: true)),
+          Expanded(child: CellText(v, maxLines: 3)),
+        ]));
     return ListView(padding: const EdgeInsets.all(20), children: [
       Row(children: [
-        IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back)),
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
         const SizedBox(width: 8),
-        Text('${tr('Order')} #${order.id}',
-            style: const TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w700)),
+        Expanded(
+          child: Text('${tr('Order')} #${order.id}',
+              style:
+                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+        ),
+        if (onDelete != null)
+          IconButton(
+              tooltip: tr('Delete Order'),
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent)),
       ]),
       const SizedBox(height: 12),
       Container(
@@ -3176,45 +3303,36 @@ class OrderDetailPage extends StatelessWidget {
         decoration: BoxDecoration(
             color: sch.surface,
             borderRadius: BorderRadius.circular(14),
-            border:
-                Border.all(color: sch.outlineVariant)),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              row(tr('Customer'),
-                  order.owner.isEmpty ? tr('Guest') : order.owner),
-              row(tr('Date'), order.date.toLocal().toString()),
-              row(tr('Address'), order.deliveryAddress),
-              row(tr('Status'), tr(order.status)),
-              const Divider(height: 24),
-              ...order.items.map((it) => Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Expanded(
-                        child: CellText(it.product.title)),
-                    CellText('x${it.quantity}'),
-                    const SizedBox(width: 16),
-                    SizedBox(
-                        width: 80,
-                        child: Text(
-                            '\$${(it.product.price * it.quantity).toStringAsFixed(2)}',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight:
-                                    FontWeight.w600))),
-                  ]))),
-              const Divider(height: 24),
-              Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                      '${tr('Total')}: \$${order.total.toStringAsFixed(2)}',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: sch.primary))),
-            ]),
+            border: Border.all(color: sch.outlineVariant)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          row(tr('Customer'), order.owner.isEmpty ? tr('Guest') : order.owner),
+          row(tr('Date'), order.date.toLocal().toString()),
+          row(tr('Address'), order.deliveryAddress),
+          row(tr('Status'), tr(order.status)),
+          const Divider(height: 24),
+          ...order.items.map((it) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                Expanded(child: CellText(it.product.title)),
+                CellText('x${it.quantity}'),
+                const SizedBox(width: 16),
+                SizedBox(
+                    width: 80,
+                    child: Text(
+                        '\$${(it.product.price * it.quantity).toStringAsFixed(2)}',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600))),
+              ]))),
+          const Divider(height: 24),
+          Align(
+              alignment: Alignment.centerRight,
+              child: Text('${tr('Total')}: \$${order.total.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: sch.primary))),
+        ]),
       ),
     ]);
   }
@@ -3242,42 +3360,32 @@ class FeedbackTablePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tr = AppLocalizations.of(context).t;
+    final l = AppLocalizations.of(context);
+    final tr = l.t;
     const perPage = AdminTableScaffold.rowsPerPageConst;
-    final totalPages =
-        (feedbacks.length / perPage).ceil().clamp(1, 1 << 30);
-    final slice =
-        feedbacks.skip(page * perPage).take(perPage).toList();
+    final totalPages = (feedbacks.length / perPage).ceil().clamp(1, 1 << 30);
+    final slice = feedbacks.skip(page * perPage).take(perPage).toList();
 
     Widget headerRow() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
-          Expanded(
-              flex: 3, child: CellText(tr('Name'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('User'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Rating'), header: true)),
-          Expanded(
-              flex: 5, child: CellText(tr('Message'), header: true)),
-          Expanded(
-              flex: 2, child: CellText(tr('Date'), header: true)),
+          Expanded(flex: 3, child: CellText(tr('Name'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('User'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Rating'), header: true)),
+          Expanded(flex: 5, child: CellText(tr('Message'), header: true)),
+          Expanded(flex: 2, child: CellText(tr('Date'), header: true)),
           Expanded(
               flex: 1,
-              child: Center(
-                  child: CellText(tr('Actions'), header: true))),
+              child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
     Widget row(FeedbackItem f) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(children: [
           Expanded(
-              flex: 3,
-              child: CellText(
-                  f.name.isEmpty ? tr('Guest') : f.name)),
+              flex: 3, child: CellText(f.name.isEmpty ? tr('Guest') : f.name)),
           Expanded(
-              flex: 2,
-              child: CellText(f.owner.isEmpty ? '—' : '@${f.owner}')),
+              flex: 2, child: CellText(f.owner.isEmpty ? '—' : '@${f.owner}')),
           Expanded(
               flex: 2,
               child: Row(children: [
@@ -3288,12 +3396,11 @@ class FeedbackTablePage extends StatelessWidget {
           Expanded(
               flex: 5,
               child: CellText(
-                  f.message.isEmpty ? '—' : f.message,
+                  f.message.isEmpty ? '—' : l.feedbackMessage(f.message),
                   maxLines: 2)),
           Expanded(
               flex: 2,
-              child: CellText(
-                  f.date.toLocal().toString().substring(0, 16))),
+              child: CellText(f.date.toLocal().toString().substring(0, 16))),
           Expanded(
               flex: 1,
               child: Align(
@@ -3313,7 +3420,7 @@ class FeedbackTablePage extends StatelessWidget {
       totalPages: totalPages,
       onPage: onPage,
       showingLabel: (start, n) =>
-          'Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total',
+          tr('Showing ${n == 0 ? 0 : start + 1}-${start + n} of $total'),
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
@@ -3327,16 +3434,13 @@ class FeedbackTablePage extends StatelessWidget {
 class AdminProductEditDialog extends StatefulWidget {
   final AdminRepository repo;
   final Product? existing;
-  const AdminProductEditDialog(
-      {super.key, required this.repo, this.existing});
+  const AdminProductEditDialog({super.key, required this.repo, this.existing});
 
   @override
-  State<AdminProductEditDialog> createState() =>
-      _AdminProductEditDialogState();
+  State<AdminProductEditDialog> createState() => _AdminProductEditDialogState();
 }
 
-class _AdminProductEditDialogState
-    extends State<AdminProductEditDialog> {
+class _AdminProductEditDialogState extends State<AdminProductEditDialog> {
   final _f = GlobalKey<FormState>();
   late final TextEditingController title =
       TextEditingController(text: widget.existing?.title ?? '');
@@ -3344,12 +3448,12 @@ class _AdminProductEditDialogState
       TextEditingController(text: widget.existing?.brand ?? '');
   late final TextEditingController category =
       TextEditingController(text: widget.existing?.category ?? '');
-  late final TextEditingController price = TextEditingController(
-      text: (widget.existing?.price ?? 0).toString());
+  late final TextEditingController price =
+      TextEditingController(text: (widget.existing?.price ?? 0).toString());
   late final TextEditingController stock =
       TextEditingController(text: (widget.existing?.stock ?? 0).toString());
-  late final TextEditingController rating = TextEditingController(
-      text: (widget.existing?.rating ?? 0).toString());
+  late final TextEditingController rating =
+      TextEditingController(text: (widget.existing?.rating ?? 0).toString());
 
   @override
   void dispose() {
@@ -3411,8 +3515,7 @@ class _AdminProductEditDialogState
       suffixIcon: suffix,
       filled: true,
       fillColor: sch.surfaceContainerLowest,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: border(sch.outlineVariant, 1),
       focusedBorder: border(const Color(0xFF5B4FE9), 1.8),
       border: border(sch.outlineVariant, 1),
@@ -3440,8 +3543,7 @@ class _AdminProductEditDialogState
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
@@ -3465,9 +3567,7 @@ class _AdminProductEditDialogState
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(14)),
                   child: Icon(
-                      isEdit
-                          ? Icons.edit_outlined
-                          : Icons.storefront_outlined,
+                      isEdit ? Icons.edit_outlined : Icons.storefront_outlined,
                       color: Colors.white,
                       size: 24),
                 ),
@@ -3476,10 +3576,7 @@ class _AdminProductEditDialogState
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                            isEdit
-                                ? tr('Edit Product')
-                                : tr('New Product'),
+                        Text(isEdit ? tr('Edit Product') : tr('New Product'),
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -3512,110 +3609,102 @@ class _AdminProductEditDialogState
                             icon: Icons.label_outline,
                             hint: tr('e.g. Beauty & Skincare'),
                           ),
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? tr('Please enter a name')
-                                  : null),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? tr('Please enter a name')
+                              : null),
                       const SizedBox(height: 16),
-                      Row(crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Brand')),
-                                      TextFormField(
-                                          controller: brand,
-                                          textCapitalization:
-                                              TextCapitalization.words,
-                                          decoration: _decoration(
-                                              icon: Icons.business_outlined,
-                                              hint: tr('e.g. Essence'))),
-                                    ])),
+                                  _label(tr('Brand')),
+                                  TextFormField(
+                                      controller: brand,
+                                      textCapitalization:
+                                          TextCapitalization.words,
+                                      decoration: _decoration(
+                                          icon: Icons.business_outlined,
+                                          hint: tr('e.g. Essence'))),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Categories')),
-                                      TextFormField(
-                                          controller: category,
-                                          textCapitalization:
-                                              TextCapitalization.words,
-                                          decoration: _decoration(
-                                              icon: Icons.category_outlined,
-                                              hint: 'beauty')),
-                                    ])),
+                                  _label(tr('Categories')),
+                                  TextFormField(
+                                      controller: category,
+                                      textCapitalization:
+                                          TextCapitalization.words,
+                                      decoration: _decoration(
+                                          icon: Icons.category_outlined,
+                                          hint: tr('beauty'))),
+                                ])),
                           ]),
                       const SizedBox(height: 16),
-                      Row(crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Price')),
-                                      TextFormField(
-                                          controller: price,
-                                          keyboardType:
-                                              const TextInputType
-                                                  .numberWithOptions(
-                                                      decimal: true),
-                                          decoration: _decoration(
-                                            prefixText: '\$ ',
-                                            hint: '0.00',
-                                          ),
-                                          validator: (v) =>
-                                              (double.tryParse(v ?? '') ??
-                                                      -1) <
-                                                  0
-                                                  ? tr(
-                                                      'Enter a valid price')
-                                                  : null),
-                                    ])),
+                                  _label(tr('Price')),
+                                  TextFormField(
+                                      controller: price,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                              decimal: true),
+                                      decoration: _decoration(
+                                        prefixText: '\$ ',
+                                        hint: '0.00',
+                                      ),
+                                      validator: (v) =>
+                                          (double.tryParse(v ?? '') ?? -1) < 0
+                                              ? tr('Enter a valid price')
+                                              : null),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Stock')),
-                                      TextFormField(
-                                          controller: stock,
-                                          keyboardType: TextInputType.number,
-                                          decoration: _decoration(
-                                              icon:
-                                                  Icons.inventory_2_outlined,
-                                              hint: '0')),
-                                    ])),
+                                  _label(tr('Stock')),
+                                  TextFormField(
+                                      controller: stock,
+                                      keyboardType: TextInputType.number,
+                                      decoration: _decoration(
+                                          icon: Icons.inventory_2_outlined,
+                                          hint: '0')),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Rating')),
-                                      TextFormField(
-                                          controller: rating,
-                                          keyboardType:
-                                              const TextInputType
-                                                  .numberWithOptions(
-                                                      decimal: true),
-                                          decoration: _decoration(
-                                              icon: Icons.star_outline,
-                                              hint: '0.0',
-                                          ),
-                                          validator: (v) =>
-                                              (double.tryParse(v ?? '') ??
-                                                      -1) <
-                                                  0
-                                                  ? tr(
-                                                      'Enter a valid rating')
-                                                  : null),
-                                    ])),
+                                  _label(tr('Rating')),
+                                  TextFormField(
+                                      controller: rating,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                              decimal: true),
+                                      decoration: _decoration(
+                                        icon: Icons.star_outline,
+                                        hint: '0.0',
+                                      ),
+                                      validator: (v) =>
+                                          (double.tryParse(v ?? '') ?? -1) < 0
+                                              ? tr('Enter a valid rating')
+                                              : null),
+                                ])),
                           ]),
                     ]),
               ),
@@ -3644,12 +3733,8 @@ class _AdminProductEditDialogState
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14)),
-                    icon: Icon(
-                        isEdit ? Icons.check : Icons.add,
-                        size: 18),
-                    label: Text(isEdit
-                        ? tr('Save')
-                        : tr('Add Product')),
+                    icon: Icon(isEdit ? Icons.check : Icons.add, size: 18),
+                    label: Text(isEdit ? tr('Save') : tr('Add Product')),
                   ),
                 ),
               ]),
@@ -3668,26 +3753,24 @@ class _AdminProductEditDialogState
 class AdminCompanyEditDialog extends StatefulWidget {
   final AdminRepository repo;
   final Product? existing;
-  const AdminCompanyEditDialog(
-      {super.key, required this.repo, this.existing});
+  const AdminCompanyEditDialog({super.key, required this.repo, this.existing});
 
   @override
-  State<AdminCompanyEditDialog> createState() =>
-      _AdminCompanyEditDialogState();
+  State<AdminCompanyEditDialog> createState() => _AdminCompanyEditDialogState();
 }
 
 class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
   final _f = GlobalKey<FormState>();
-  late final TextEditingController company = TextEditingController(
-      text: widget.existing?.title ?? '');
-  late final TextEditingController location = TextEditingController(
-      text: widget.existing?.category ?? '');
-  late final TextEditingController website = TextEditingController(
-      text: widget.existing?.thumbnail ?? '');
-  late final TextEditingController description = TextEditingController(
-      text: widget.existing?.description ?? '');
-  late final TextEditingController rating = TextEditingController(
-      text: (widget.existing?.rating ?? 0).toString());
+  late final TextEditingController company =
+      TextEditingController(text: widget.existing?.title ?? '');
+  late final TextEditingController location =
+      TextEditingController(text: widget.existing?.category ?? '');
+  late final TextEditingController website =
+      TextEditingController(text: widget.existing?.thumbnail ?? '');
+  late final TextEditingController description =
+      TextEditingController(text: widget.existing?.description ?? '');
+  late final TextEditingController rating =
+      TextEditingController(text: (widget.existing?.rating ?? 0).toString());
 
   late bool _verified = widget.existing?.verified ?? false;
 
@@ -3754,8 +3837,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
           color: sch.onSurfaceVariant),
       filled: true,
       fillColor: sch.surfaceContainerLowest,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: border(sch.outlineVariant, 1),
       focusedBorder: border(const Color(0xFF5B4FE9), 1.8),
       border: border(sch.outlineVariant, 1),
@@ -3783,8 +3865,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
@@ -3808,9 +3889,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(14)),
                   child: Icon(
-                      isEdit
-                          ? Icons.edit_outlined
-                          : Icons.storefront_outlined,
+                      isEdit ? Icons.edit_outlined : Icons.storefront_outlined,
                       color: Colors.white),
                 ),
                 const SizedBox(width: 14),
@@ -3818,10 +3897,7 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text(
-                          isEdit
-                              ? tr('Edit Shop')
-                              : tr('New Shop'),
+                      Text(isEdit ? tr('Edit Shop') : tr('New Shop'),
                           style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -3851,158 +3927,150 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                           textCapitalization: TextCapitalization.words,
                           decoration: _decoration(
                             icon: Icons.storefront_outlined,
-                            hint: 'e.g. Acme Corp',
+                            hint: tr('e.g. Acme Corp'),
                           ),
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? tr('Please enter a name')
-                                  : null),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? tr('Please enter a name')
+                              : null),
                       const SizedBox(height: 16),
-                      Row(crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Location')),
-                                      TextFormField(
-                                          controller: location,
-                                          decoration: _decoration(
-                                              icon: Icons.location_on_outlined,
-                                              hint: tr('City'))),
-                                    ])),
+                                  _label(tr('Location')),
+                                  TextFormField(
+                                      controller: location,
+                                      decoration: _decoration(
+                                          icon: Icons.location_on_outlined,
+                                          hint: tr('City'))),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Website')),
-                                      TextFormField(
-                                          controller: website,
-                                          keyboardType: TextInputType.url,
-                                          decoration: _decoration(
-                                              icon: Icons.public,
-                                              hint: 'https://...')),
-                                    ])),
+                                  _label(tr('Website')),
+                                  TextFormField(
+                                      controller: website,
+                                      keyboardType: TextInputType.url,
+                                      decoration: _decoration(
+                                          icon: Icons.public,
+                                          hint: 'https://...')),
+                                ])),
                           ]),
                       const SizedBox(height: 16),
-                      Row(crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Verified')),
-                                      Container(
-                                        height: 50,
-                                        alignment: Alignment.centerLeft,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14),
-                                        decoration: BoxDecoration(
+                                  _label(tr('Verified')),
+                                  Container(
+                                    height: 50,
+                                    alignment: Alignment.centerLeft,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14),
+                                    decoration: BoxDecoration(
+                                        color: _verified
+                                            ? const Color(0xFF5B4FE9)
+                                                .withValues(alpha: 0.10)
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerLowest,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
                                             color: _verified
                                                 ? const Color(0xFF5B4FE9)
-                                                    .withValues(alpha: 0.10)
+                                                    .withValues(alpha: 0.5)
                                                 : Theme.of(context)
                                                     .colorScheme
-                                                    .surfaceContainerLowest,
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                            border: Border.all(
-                                                color: _verified
-                                                    ? const Color(0xFF5B4FE9)
-                                                        .withValues(
-                                                            alpha: 0.5)
-                                                    : Theme.of(context)
-                                                        .colorScheme
-                                                        .outlineVariant)),
-                                        child: Row(children: [
-                                          Icon(
+                                                    .outlineVariant)),
+                                    child: Row(children: [
+                                      Icon(
+                                          _verified
+                                              ? Icons.verified_outlined
+                                              : Icons.verified_user_outlined,
+                                          size: 20,
+                                          color: _verified
+                                              ? const Color(0xFF5B4FE9)
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .outline),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                          child: Text(
                                               _verified
-                                                  ? Icons.verified_outlined
-                                                  : Icons.verified_user_outlined,
-                                              size: 20,
-                                              color: _verified
-                                                  ? const Color(0xFF5B4FE9)
-                                                  : Theme.of(context)
-                                                      .colorScheme
-                                                      .outline),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                              child: Text(
-                                                  _verified
-                                                      ? tr('Verified')
-                                                      : tr('Unverified'),
-                                                  style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: _verified
-                                                          ? const Color(
-                                                              0xFF5B4FE9)
-                                                          : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurfaceVariant))),
-                                          Switch(
-                                            value: _verified,
-                                            activeTrackColor:
-                                                const Color(0xFF5B4FE9),
-                                            onChanged: (v) => setState(() =>
-                                                _verified = v),
-                                          ),
-                                        ]),
+                                                  ? tr('Verified')
+                                                  : tr('Unverified'),
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: _verified
+                                                      ? const Color(0xFF5B4FE9)
+                                                      : Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant))),
+                                      Switch(
+                                        value: _verified,
+                                        activeTrackColor:
+                                            const Color(0xFF5B4FE9),
+                                        onChanged: (v) =>
+                                            setState(() => _verified = v),
                                       ),
-                                    ])),
+                                    ]),
+                                  ),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Status')),
-                                      DropdownButtonFormField<String>(
-                                        initialValue: _status,
-                                        decoration: _decoration(
-                                            icon: Icons.verified_outlined),
-                                        items: ['Active', 'Inactive']
-                                            .map((s) => DropdownMenuItem(
-                                                value: s,
-                                                child: Text(
-                                                    s == 'Active'
-                                                        ? tr('Active')
-                                                        : tr('Inactive'))))
-                                            .toList(),
-                                        onChanged: (v) => setState(() =>
-                                            _status = v ?? 'Active'),
-                                      ),
-                                    ])),
+                                  _label(tr('Status')),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _status,
+                                    decoration: _decoration(
+                                        icon: Icons.verified_outlined),
+                                    items: ['Active', 'Inactive']
+                                        .map((s) => DropdownMenuItem(
+                                            value: s,
+                                            child: Text(s == 'Active'
+                                                ? tr('Active')
+                                                : tr('Inactive'))))
+                                        .toList(),
+                                    onChanged: (v) =>
+                                        setState(() => _status = v ?? 'Active'),
+                                  ),
+                                ])),
                             const SizedBox(width: 12),
                             Expanded(
                                 child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      _label(tr('Rating')),
-                                      TextFormField(
-                                          controller: rating,
-                                          keyboardType:
-                                              const TextInputType
-                                                  .numberWithOptions(
-                                                      decimal: true),
-                                          decoration: _decoration(
-                                              icon: Icons.star_outline,
-                                              hint: '0.0',
-                                          ),
-                                          validator: (v) =>
-                                              (double.tryParse(v ?? '') ??
-                                                      -1) <
-                                                  0
-                                                  ? tr(
-                                                      'Enter a valid rating')
-                                                  : null),
-                                    ])),
+                                  _label(tr('Rating')),
+                                  TextFormField(
+                                      controller: rating,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                              decimal: true),
+                                      decoration: _decoration(
+                                        icon: Icons.star_outline,
+                                        hint: '0.0',
+                                      ),
+                                      validator: (v) =>
+                                          (double.tryParse(v ?? '') ?? -1) < 0
+                                              ? tr('Enter a valid rating')
+                                              : null),
+                                ])),
                           ]),
                       const SizedBox(height: 16),
                       _label(tr('Description')),
@@ -4043,12 +4111,8 @@ class _AdminCompanyEditDialogState extends State<AdminCompanyEditDialog> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14)),
-                    icon: Icon(
-                        isEdit ? Icons.check : Icons.add,
-                        size: 18),
-                    label: Text(isEdit
-                        ? tr('Save')
-                        : tr('Add Shop')),
+                    icon: Icon(isEdit ? Icons.check : Icons.add, size: 18),
+                    label: Text(isEdit ? tr('Save') : tr('Add Shop')),
                   ),
                 ),
               ]),

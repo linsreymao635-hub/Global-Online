@@ -9,8 +9,8 @@ class AuthRepository {
   final GoogleAuthService _google = GoogleAuthService();
   AuthRepository(this.api);
   Future<User?> login(String u, String p) => api.login(u, p);
-  Future<User?> signup(String f, String l, String u, String p, String e,
-        String ph) =>
+  Future<User?> signup(
+          String f, String l, String u, String p, String e, String ph) =>
       api.signup(f, l, u, p, e, ph);
   Future<User?> googleLogin() async {
     final u = await _google.signIn();
@@ -56,10 +56,9 @@ class AdminRepository {
   Future<void> add(Product p) => api.addProduct(p);
   Future<void> update(Product p) => api.updateProduct(p);
   Future<void> delete(int id) => api.deleteProduct(id);
-Future<void> addCategory(String name,
-        {String slug = '', String description = '', String image = ''}) =>
-    api.addCategory(name,
-        slug: slug, description: description, image: image);
+  Future<void> addCategory(String name,
+          {String slug = '', String description = '', String image = ''}) =>
+      api.addCategory(name, slug: slug, description: description, image: image);
 
   Future<void> updateCategory(Category original,
           {required String name,
@@ -67,10 +66,7 @@ Future<void> addCategory(String name,
           String description = '',
           String image = ''}) =>
       api.updateCategory(original,
-          name: name,
-          slug: slug,
-          description: description,
-          image: image);
+          name: name, slug: slug, description: description, image: image);
   Future<void> deleteCategory(Category c) => api.deleteCategory(c);
 
   /// All shop accounts registered in the cloud directory.
@@ -85,6 +81,38 @@ Future<void> addCategory(String name,
   Future<bool> setUserAdmin(String username, bool isAdmin) =>
       supa.updateUserRole(username, isAdmin);
 
+  /// Promotion path for an existing shopper. The RLS migration permits this
+  /// only to authenticated administrators.
+  Future<bool> setUserVendor(String username, bool isVendor) =>
+      supa.updateUserVendorRole(username, isVendor);
+
+  /// Create a new staff/shopper account from the Administration page.
+  /// Uploads the password hash so the account can actually sign in.
+  Future<bool> createUser(
+      {required String username,
+      String firstName = '',
+      String lastName = '',
+      String email = '',
+      String phone = '',
+      String password = '',
+      bool isAdmin = false,
+      bool isVendor = false}) {
+    final key = username.trim().toLowerCase();
+    if (key.isEmpty || password.isEmpty) return Future.value(false);
+    return supa.upsertUser({
+      'username': key,
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'email': email.trim().toLowerCase(),
+      'phone': phone.trim(),
+      'image': '',
+      'is_admin': isAdmin,
+      'role': isAdmin ? 'admin' : (isVendor ? 'vendor' : 'user'),
+      'provider': 'local',
+      'password_hash': SupabaseService.hashPassword(password),
+    });
+  }
+
   /// Every order in the shop (not just this device's).
   Future<List<Order>> orders() => supa.orders();
 
@@ -94,7 +122,43 @@ Future<void> addCategory(String name,
   Future<bool> setOrderStatus(String id, String status) =>
       supa.updateOrderStatus(id, status);
 
+  /// Delete an order row from the shared cloud so it disappears for the
+  /// shopper on every device.
+  Future<bool> deleteOrder(String id) => supa.deleteOrder(id);
+
   /// Feedback left by shoppers across all devices.
   Future<List<FeedbackItem>> feedbacks() => supa.feedbacks();
   Future<void> deleteFeedback(int id) => supa.deleteFeedback(id);
+}
+
+/// Vendor operations never accept an arbitrary owner from the UI. The signed
+/// in vendor is fixed when this repository is constructed.
+class VendorRepository {
+  final String username;
+  final SupabaseService supa = SupabaseService.instance;
+  VendorRepository(String username) : username = username.trim().toLowerCase();
+
+  Future<List<Product>> products() => supa.vendorProducts(username);
+  Future<List<Order>> orders() => supa.vendorOrders();
+  Future<List<FeedbackItem>> feedbacks() => supa.vendorFeedbacks();
+  Future<bool> add(Product product) => supa
+      .addProductRow(Product(
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        discountPercentage: product.discountPercentage,
+        rating: product.rating,
+        stock: product.stock,
+        brand: product.brand,
+        category: product.category,
+        description: product.description,
+        thumbnail: product.thumbnail,
+        images: product.images,
+        status: product.status,
+        vendorUsername: username,
+      ))
+      .then((row) => row != null);
+  Future<bool> update(Product product) =>
+      supa.updateVendorProduct(username, product);
+  Future<bool> delete(int id) => supa.deleteVendorProduct(username, id);
 }
