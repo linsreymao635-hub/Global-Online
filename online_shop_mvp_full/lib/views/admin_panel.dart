@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
@@ -102,6 +103,9 @@ class AdminPanelPageState extends State<AdminPanelPage> {
   String? _error;
   User? _selectedUser; // detail view opened from the Users list
   Order? _selectedOrder; // detail view opened from the Orders list
+  Product? _selectedProduct; // detail view (Products + Shops pages)
+  Category? _selectedCategory; // detail view opened from the Categories list
+  FeedbackItem? _selectedFeedback; // detail view opened from the Feedback list
   int _userPage = 0,
       _orderPage = 0,
       _productPage = 0,
@@ -377,6 +381,9 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       _page = page;
       _selectedUser = null;
       _selectedOrder = null;
+      _selectedProduct = null;
+      _selectedCategory = null;
+      _selectedFeedback = null;
       _search = '';
       _userPage = _orderPage = _productPage = _catPage = _feedbackPage = 0;
     });
@@ -1053,11 +1060,35 @@ class AdminPanelPageState extends State<AdminPanelPage> {
           ? adminDarkColorScheme
           : ColorScheme.fromSeed(seedColor: Colors.blue));
 
+  /// True while any list's detail view is open. Browser/system back should
+  /// close the detail view FIRST and only pop the whole admin panel once no
+  /// detail is open (otherwise back jumps straight out to the shop).
+  bool get _detailOpen =>
+      _selectedUser != null ||
+      _selectedOrder != null ||
+      _selectedProduct != null ||
+      _selectedCategory != null ||
+      _selectedFeedback != null;
+
   @override
   Widget build(BuildContext context) {
     return Theme(
       data: _panelTheme,
-      child: Scaffold(
+      child: PopScope(
+        canPop: !_detailOpen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          // Back was pressed while a detail view is open: close it and
+          // return to the underlying table instead of leaving the panel.
+          setState(() {
+            _selectedUser = null;
+            _selectedOrder = null;
+            _selectedProduct = null;
+            _selectedCategory = null;
+            _selectedFeedback = null;
+          });
+        },
+        child: Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
         body: Row(children: [
           _sidebar(),
@@ -1074,6 +1105,7 @@ class AdminPanelPageState extends State<AdminPanelPage> {
             ]),
           ),
         ]),
+        ),
       ),
     );
   }
@@ -1156,32 +1188,42 @@ class AdminPanelPageState extends State<AdminPanelPage> {
       case 'dashboard':
         return _dashboardGrid();
       case 'categories':
-        return CategoriesTablePage(
-            cats: _filteredCats,
-            total: _cats.length,
-            page: _catPage,
-            editedSlug: _justEditedSlug,
-            onPage: (p) => setState(() => _catPage = p),
-            onSearch: (v) => setState(() {
-                  _search = v;
-                  _catPage = 0;
-                }),
-            onAdd: _addCategory,
-            onEdit: _editCategory,
-            onDelete: _deleteCategory);
+        return _selectedCategory != null
+            ? CategoryDetailPage(
+                category: _selectedCategory!,
+                onBack: () => setState(() => _selectedCategory = null))
+            : CategoriesTablePage(
+                cats: _filteredCats,
+                total: _cats.length,
+                page: _catPage,
+                editedSlug: _justEditedSlug,
+                onPage: (p) => setState(() => _catPage = p),
+                onSearch: (v) => setState(() {
+                      _search = v;
+                      _catPage = 0;
+                    }),
+                onAdd: _addCategory,
+                onOpen: (c) => setState(() => _selectedCategory = c),
+                onEdit: _editCategory,
+                onDelete: _deleteCategory);
       case 'products':
-        return ProductsTablePage(
-            products: _filteredProducts,
-            total: _products.length,
-            page: _productPage,
-            onPage: (p) => setState(() => _productPage = p),
-            onSearch: (v) => setState(() {
-                  _search = v;
-                  _productPage = 0;
-                }),
-            onAdd: () => _editProduct(),
-            onEdit: _editProduct,
-            onDelete: _deleteProduct);
+        return _selectedProduct != null
+            ? ProductDetailPage(
+                product: _selectedProduct!,
+                onBack: () => setState(() => _selectedProduct = null))
+            : ProductsTablePage(
+                products: _filteredProducts,
+                total: _products.length,
+                page: _productPage,
+                onPage: (p) => setState(() => _productPage = p),
+                onSearch: (v) => setState(() {
+                      _search = v;
+                      _productPage = 0;
+                    }),
+                onAdd: () => _editProduct(),
+                onOpen: (p) => setState(() => _selectedProduct = p),
+                onEdit: _editProduct,
+                onDelete: _deleteProduct);
       case 'users':
         return _selectedUser != null
             ? UserDetailPage(
@@ -1226,29 +1268,39 @@ class AdminPanelPageState extends State<AdminPanelPage> {
             repo: widget.repo,
             onUsersChanged: () => _onLiveUsers());
       case 'feedback':
-        return FeedbackTablePage(
-            feedbacks: _filteredFeedbacks,
-            total: _feedbacks.length,
-            page: _feedbackPage,
-            onPage: (p) => setState(() => _feedbackPage = p),
-            onSearch: (v) => setState(() {
-                  _search = v;
-                  _feedbackPage = 0;
-                }),
-            onDelete: _deleteFeedback);
+        return _selectedFeedback != null
+            ? FeedbackDetailPage(
+                feedback: _selectedFeedback!,
+                onBack: () => setState(() => _selectedFeedback = null))
+            : FeedbackTablePage(
+                feedbacks: _filteredFeedbacks,
+                total: _feedbacks.length,
+                page: _feedbackPage,
+                onPage: (p) => setState(() => _feedbackPage = p),
+                onSearch: (v) => setState(() {
+                      _search = v;
+                      _feedbackPage = 0;
+                    }),
+                onOpen: (f) => setState(() => _selectedFeedback = f),
+                onDelete: _deleteFeedback);
       default:
-        return CompaniesTablePage(
-            products: _filteredProducts,
-            total: _products.length,
-            page: _productPage,
-            onPage: (p) => setState(() => _productPage = p),
-            onSearch: (v) => setState(() {
-                  _search = v;
-                  _productPage = 0;
-                }),
-            onAdd: () => _editCompany(),
-            onEdit: _editCompany,
-            onDelete: _deleteProduct);
+        return _selectedProduct != null
+            ? ShopDetailPage(
+                shop: _selectedProduct!,
+                onBack: () => setState(() => _selectedProduct = null))
+            : CompaniesTablePage(
+                products: _filteredProducts,
+                total: _products.length,
+                page: _productPage,
+                onPage: (p) => setState(() => _productPage = p),
+                onSearch: (v) => setState(() {
+                      _search = v;
+                      _productPage = 0;
+                    }),
+                onAdd: () => _editCompany(),
+                onOpen: (p) => setState(() => _selectedProduct = p),
+                onEdit: _editCompany,
+                onDelete: _deleteProduct);
     }
   }
 
@@ -2410,6 +2462,7 @@ class CompaniesTablePage extends StatelessWidget {
   final ValueChanged<int> onPage;
   final ValueChanged<String> onSearch;
   final VoidCallback onAdd;
+  final void Function(Product) onOpen;
   final void Function(Product) onEdit;
   final void Function(Product) onDelete;
   const CompaniesTablePage(
@@ -2420,6 +2473,7 @@ class CompaniesTablePage extends StatelessWidget {
       required this.onPage,
       required this.onSearch,
       required this.onAdd,
+      required this.onOpen,
       required this.onEdit,
       required this.onDelete});
 
@@ -2440,7 +2494,7 @@ class CompaniesTablePage extends StatelessWidget {
           Expanded(flex: 2, child: CellText(tr('Verified'), header: true)),
           Expanded(flex: 2, child: CellText(tr('Status'), header: true)),
           Expanded(
-              flex: 2,
+              flex: 3,
               child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
@@ -2494,13 +2548,21 @@ class CompaniesTablePage extends StatelessWidget {
                       tr(p.status == 'Inactive' ? 'Inactive' : 'Active'),
                       color:
                           p.status == 'Inactive' ? Colors.grey : Colors.green)),
-              // Edit / Delete actions for this shop row (centered so the
-              // Actions header sits directly above both buttons).
+              // View / Edit / Delete actions for this shop row (centered so
+              // the Actions header sits directly above the buttons).
               Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        IconButton(
+                          tooltip: tr('View detail'),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => onOpen(p),
+                          icon: const Icon(Icons.visibility_outlined,
+                              size: 19, color: Color(0xFF5B4FE9)),
+                        ),
+                        const SizedBox(width: 6),
                         IconButton(
                           tooltip: tr('Edit'),
                           visualDensity: VisualDensity.compact,
@@ -2548,6 +2610,7 @@ class CategoriesTablePage extends StatelessWidget {
   final ValueChanged<int> onPage;
   final ValueChanged<String> onSearch;
   final VoidCallback onAdd;
+  final void Function(Category) onOpen;
   final void Function(Category) onEdit;
   final void Function(Category) onDelete;
   final String? editedSlug;
@@ -2559,6 +2622,7 @@ class CategoriesTablePage extends StatelessWidget {
       required this.onPage,
       required this.onSearch,
       required this.onAdd,
+      required this.onOpen,
       required this.onEdit,
       required this.onDelete,
       this.editedSlug});
@@ -2578,7 +2642,7 @@ class CategoriesTablePage extends StatelessWidget {
           Expanded(flex: 4, child: CellText(tr('Description'), header: true)),
           Expanded(flex: 3, child: CellText(tr('URL'), header: true)),
           Expanded(
-              flex: 2,
+              flex: 3,
               child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
@@ -2630,12 +2694,18 @@ class CategoriesTablePage extends StatelessWidget {
               child: CellText(cat.description.isEmpty ? '—' : cat.description,
                   maxLines: 2)),
           Expanded(flex: 3, child: CellText(cat.url)),
-          // Edit / Delete actions for this category row (centered so the
-          // Actions header sits directly above both buttons).
+          // View / Edit / Delete actions for this category row (centered so
+          // the Actions header sits directly above the buttons).
           Expanded(
-              flex: 2,
+              flex: 3,
               child:
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                IconButton(
+                    tooltip: tr('View detail'),
+                    onPressed: () => onOpen(cat),
+                    icon: const Icon(Icons.visibility_outlined,
+                        size: 20, color: Color(0xFF5B4FE9))),
+                const SizedBox(width: 6),
                 IconButton(
                     tooltip: tr('Edit'),
                     onPressed: () => onEdit(cat),
@@ -2679,6 +2749,7 @@ class ProductsTablePage extends StatelessWidget {
   final ValueChanged<int> onPage;
   final ValueChanged<String> onSearch;
   final VoidCallback onAdd;
+  final void Function(Product) onOpen;
   final void Function(Product) onEdit;
   final void Function(Product) onDelete;
   const ProductsTablePage(
@@ -2689,6 +2760,7 @@ class ProductsTablePage extends StatelessWidget {
       required this.onPage,
       required this.onSearch,
       required this.onAdd,
+      required this.onOpen,
       required this.onEdit,
       required this.onDelete});
 
@@ -2709,7 +2781,7 @@ class ProductsTablePage extends StatelessWidget {
           Expanded(flex: 1, child: CellText(tr('Stock'), header: true)),
           Expanded(flex: 2, child: CellText(tr('Rating'), header: true)),
           Expanded(
-              flex: 2,
+              flex: 3,
               child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
@@ -2742,13 +2814,21 @@ class ProductsTablePage extends StatelessWidget {
                       const SizedBox(width: 4),
                       CellText(p.rating.toStringAsFixed(1)),
                     ])),
-                // Edit / Delete actions for this product row (centered so the
-                // Actions header sits directly above both buttons).
+                // View / Edit / Delete actions for this product row (centered
+                // so the Actions header sits directly above the buttons).
                 Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          IconButton(
+                            tooltip: tr('View detail'),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => onOpen(p),
+                            icon: const Icon(Icons.visibility_outlined,
+                                size: 19, color: Color(0xFF5B4FE9)),
+                          ),
+                          const SizedBox(width: 6),
                           IconButton(
                             tooltip: tr('Edit'),
                             visualDensity: VisualDensity.compact,
@@ -2781,6 +2861,430 @@ class ProductsTablePage extends StatelessWidget {
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
+  }
+}
+
+// ============================================================================
+// Shop / Category / Product detail pages (opened via the View detail button)
+// ============================================================================
+
+/// Opens a URL from a detail card (shop website / category URL) in the
+/// system browser. Silently ignores invalid or unopenable links.
+Future<void> _launchDetailUrl(String url) async {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null) return;
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
+/// One labelled row of a detail card — same look as the user profile rows.
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final int maxLines;
+  final VoidCallback? onTap;
+  const _DetailRow(this.icon, this.label, this.value,
+      {this.maxLines = 1, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    final valueStyle = TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: onTap != null ? const Color(0xFF5B4FE9) : null);
+    return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+            crossAxisAlignment: maxLines > 1
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
+            children: [
+              Padding(
+                  padding: EdgeInsets.only(top: maxLines > 1 ? 2 : 0),
+                  child: Icon(icon, size: 18, color: sch.onSurfaceVariant)),
+              const SizedBox(width: 10),
+              SizedBox(
+                  width: 96,
+                  child: Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5, color: sch.onSurfaceVariant))),
+              Expanded(
+                child: onTap == null
+                    ? Text(value.isEmpty ? '—' : value,
+                        maxLines: maxLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: valueStyle)
+                    : InkWell(
+                        onTap: onTap,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Flexible(
+                                  child: Text(value.isEmpty ? '—' : value,
+                                      maxLines: maxLines,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: valueStyle)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.open_in_new,
+                                  size: 14, color: Color(0xFF5B4FE9)),
+                            ]))),
+              ),
+            ]));
+  }
+}
+
+/// Detail card shared by the three pages below: gradient banner, optional
+/// floating avatar, name block and an inset details table.
+class _DetailCard extends StatelessWidget {
+  final Widget? banner;
+  final Widget? avatar;
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? badges;
+  final List<Widget> rows;
+  final List<Widget> extra;
+  const _DetailCard(
+      {this.banner,
+      this.avatar,
+      required this.title,
+      this.subtitle,
+      this.badges,
+      required this.rows,
+      this.extra = const []});
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Container(
+          decoration: BoxDecoration(
+              color: sch.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: sch.outlineVariant),
+              boxShadow: [
+                BoxShadow(
+                    color: sch.shadow.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6))
+              ]),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (banner != null || avatar != null)
+                Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      banner ??
+                          Container(
+                            height: 112,
+                            width: double.infinity,
+                            decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                  Color(0xFF5B4FE9),
+                                  Color(0xFF9C6ADE)
+                                ])),
+                          ),
+                      if (avatar != null) Positioned(bottom: -46, child: avatar!),
+                    ]),
+              SizedBox(height: avatar != null ? 56 : 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(children: [
+                  title,
+                  if (subtitle != null) ...[const SizedBox(height: 6), subtitle!],
+                  if (badges != null) ...[
+                    const SizedBox(height: 10),
+                    badges!,
+                  ],
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                        color: sch.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: sch.outlineVariant)),
+                    child: Column(children: rows),
+                  ),
+                  ...extra,
+                  const SizedBox(height: 20),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ShopDetailPage extends StatelessWidget {
+  final Product shop;
+  final VoidCallback onBack;
+  const ShopDetailPage({super.key, required this.shop, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    final tr = AppLocalizations.of(context).t;
+    final name = shop.title.isNotEmpty ? shop.title : shop.brand;
+    final site = shop.thumbnail.trim();
+
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(name,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700))),
+      ]),
+      const SizedBox(height: 16),
+      _DetailCard(
+        avatar: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: sch.surface,
+              boxShadow: [
+                BoxShadow(
+                    color: sch.shadow.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3))
+              ]),
+          child: CircleAvatar(
+              radius: 42,
+              backgroundColor: sch.primaryContainer,
+              child: Text(
+                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                  style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF5B4FE9)))),
+        ),
+        title: Text(name,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        subtitle: shop.category.isEmpty
+            ? null
+            : Text(shop.category,
+                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+        badges: Row(mainAxisSize: MainAxisSize.min, children: [
+          Pill(shop.verified ? tr('Verified') : tr('Unverified'),
+              color: shop.verified ? Colors.green : Colors.orange),
+          const SizedBox(width: 8),
+          Pill(tr(shop.status == 'Inactive' ? 'Inactive' : 'Active'),
+              color:
+                  shop.status == 'Inactive' ? Colors.grey : Colors.green),
+        ]),
+        rows: [
+          _DetailRow(Icons.storefront_outlined, tr('Shop'), name),
+          _DetailRow(
+              Icons.location_on_outlined, tr('Location'), shop.category),
+          _DetailRow(Icons.link, tr('Website'), site,
+              onTap:
+                  site.isEmpty ? null : () => _launchDetailUrl(site)),
+          _DetailRow(Icons.star_outline, tr('Rating'),
+              shop.rating.toStringAsFixed(1)),
+          _DetailRow(
+              Icons.badge_outlined, tr('ID'), shop.id.toString()),
+          _DetailRow(Icons.notes_outlined, tr('Description'),
+              shop.description,
+              maxLines: 4),
+        ],
+      ),
+    ]);
+  }
+}
+
+class CategoryDetailPage extends StatelessWidget {
+  final Category category;
+  final VoidCallback onBack;
+  const CategoryDetailPage(
+      {super.key, required this.category, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    final tr = AppLocalizations.of(context).t;
+    final url = category.url.trim();
+
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(category.name,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700))),
+      ]),
+      const SizedBox(height: 16),
+      _DetailCard(
+        avatar: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: sch.surface,
+              boxShadow: [
+                BoxShadow(
+                    color: sch.shadow.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3))
+              ]),
+          child: CircleAvatar(
+              radius: 42,
+              backgroundColor: category.image.isEmpty
+                  ? sch.primaryContainer
+                  : null,
+              backgroundImage: category.image.isEmpty
+                  ? null
+                  : NetworkImage(category.image),
+              child: category.image.isEmpty
+                  ? Text(
+                      category.name.isNotEmpty
+                          ? category.name.substring(0, 1).toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF5B4FE9)))
+                  : null),
+        ),
+        title: Text(category.name,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        subtitle: category.slug.isEmpty
+            ? null
+            : Text(category.slug,
+                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+        rows: [
+          _DetailRow(Icons.category_outlined, tr('Name'), category.name),
+          _DetailRow(Icons.tag, tr('Slug'), category.slug),
+          _DetailRow(Icons.link, tr('URL'), url,
+              onTap: url.isEmpty ? null : () => _launchDetailUrl(url)),
+          _DetailRow(Icons.notes_outlined, tr('Description'),
+              category.description,
+              maxLines: 4),
+        ],
+      ),
+    ]);
+  }
+}
+
+class ProductDetailPage extends StatelessWidget {
+  final Product product;
+  final VoidCallback onBack;
+  const ProductDetailPage(
+      {super.key, required this.product, required this.onBack});
+
+  Widget _banner(ColorScheme sch) {
+    Widget fallback() => Container(
+        decoration: const BoxDecoration(
+            gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF5B4FE9), Color(0xFF9C6ADE)])),
+        child: const Icon(Icons.inventory_2_outlined,
+            size: 40, color: Colors.white70));
+    return SizedBox(
+      height: 150,
+      width: double.infinity,
+      child: product.thumbnail.isEmpty
+          ? fallback()
+          : Image.network(product.thumbnail,
+              fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    final tr = AppLocalizations.of(context).t;
+
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(product.title,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700))),
+      ]),
+      const SizedBox(height: 16),
+      _DetailCard(
+        banner: _banner(sch),
+        title: Text(product.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        subtitle: product.brand.isEmpty
+            ? null
+            : Text(product.brand,
+                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+        badges: Pill(tr(product.status == 'Inactive' ? 'Inactive' : 'Active'),
+            color:
+                product.status == 'Inactive' ? Colors.grey : Colors.green),
+        rows: [
+          _DetailRow(Icons.category_outlined, tr('Category'),
+              product.category),
+          _DetailRow(Icons.sell_outlined, tr('Price'),
+              '\$${product.price.toStringAsFixed(2)}'),
+          _DetailRow(
+              Icons.percent,
+              tr('Discount'),
+              product.discountPercentage <= 0
+                  ? ''
+                  : '${product.discountPercentage.toStringAsFixed(0)}%'),
+          _DetailRow(
+              Icons.inventory_2_outlined, tr('Stock'), '${product.stock}'),
+          _DetailRow(Icons.star_outline, tr('Rating'),
+              '${product.rating.toStringAsFixed(1)} / 5'),
+          _DetailRow(
+              Icons.person_outline,
+              tr('Vendor'),
+              product.vendorUsername.isEmpty
+                  ? ''
+                  : '@${product.vendorUsername}'),
+          _DetailRow(
+              Icons.badge_outlined, tr('ID'), product.id.toString()),
+          _DetailRow(Icons.notes_outlined, tr('Description'),
+              product.description,
+              maxLines: 4),
+        ],
+        extra: [
+          if (product.images.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                height: 76,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: product.images.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(product.images[i],
+                          width: 76,
+                          height: 76,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                              width: 76,
+                              height: 76,
+                              color: sch.surfaceContainerHighest,
+                              child:
+                                  const Icon(Icons.image_outlined)))),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ]);
   }
 }
 
@@ -2907,65 +3411,200 @@ class UserDetailPage extends StatelessWidget {
   final VoidCallback onBack;
   const UserDetailPage({super.key, required this.user, required this.onBack});
 
+  /// Profile photo of the user (network or base64), or null to fall back to
+  /// the gradient initial avatar — mirrors [AdminPanelPageState._adminAvatarImage].
+  ImageProvider? _avatarImage(String? s) {
+    if (s == null || s.isEmpty) return null;
+    if (s.startsWith('b64:')) {
+      try {
+        return MemoryImage(base64Decode(s.substring(4)));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(s);
+  }
+
+  String _dateStr(DateTime? dt) {
+    if (dt == null) return '';
+    final l = dt.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${l.year}-${two(l.month)}-${two(l.day)} '
+        '${two(l.hour)}:${two(l.minute)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final sch = Theme.of(context).colorScheme;
     final tr = AppLocalizations.of(context).t;
-    final isAdmin = user.isAdmin ||
+    final isAdminUser = user.isAdmin ||
         user.username.trim().toLowerCase() == ApiService.adminUsername;
-    Widget row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 110, child: CellText(k, header: true)),
-          Expanded(child: CellText(v.isEmpty ? '—' : v, maxLines: 3)),
+    final avatarImg = _avatarImage(user.image);
+    final name = user.fullName.isNotEmpty ? user.fullName : '@${user.username}';
+
+    Widget profileRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(children: [
+          Icon(icon, size: 18, color: sch.onSurfaceVariant),
+          const SizedBox(width: 10),
+          SizedBox(
+              width: 96,
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 12.5, color: sch.onSurfaceVariant))),
+          Expanded(
+            child: Text(value.isEmpty ? '—' : value,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
         ]));
+
+    Widget avatarCircle() => CircleAvatar(
+        radius: 42,
+        backgroundColor: avatarImg == null
+            ? (isAdminUser
+                ? const Color(0xFF5B4FE9).withValues(alpha: 0.15)
+                : sch.secondaryContainer)
+            : sch.primaryContainer,
+        foregroundColor: avatarImg == null
+            ? (isAdminUser
+                ? const Color(0xFF5B4FE9)
+                : sch.onSecondaryContainer)
+            : null,
+        backgroundImage: avatarImg,
+        child: avatarImg == null
+            ? Text(
+                user.fullName.isNotEmpty
+                    ? user.fullName.substring(0, 1).toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                    fontSize: 26, fontWeight: FontWeight.w800))
+            : null);
+
     return ListView(padding: const EdgeInsets.all(20), children: [
       Row(children: [
         IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(user.fullName.isEmpty
-              ? '@${user.username}'
-              : user.fullName,
-              style:
-                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-        ),
+            child: Text(name,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700))),
       ]),
-      const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-            color: sch.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: sch.outlineVariant)),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Align(
-              alignment: Alignment.center,
-              child: CircleAvatar(
-                  radius: 30,
-                  backgroundColor: isAdmin
-                      ? const Color(0xFF5B4FE9).withValues(alpha: 0.15)
-                      : sch.secondaryContainer,
-                  child: Text(
-                      user.fullName.isNotEmpty
-                          ? user.fullName.substring(0, 1).toUpperCase()
-                          : '?',
+      const SizedBox(height: 16),
+      // ------------------------------------------------- profile card
+      // Centered + width-capped so it reads as a profile card on wide
+      // desktop screens instead of a stretched full-window banner.
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Container(
+            decoration: BoxDecoration(
+                color: sch.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: sch.outlineVariant),
+                boxShadow: [
+                  BoxShadow(
+                      color: sch.shadow.withValues(alpha: 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6))
+                ]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      Container(
+                        height: 112,
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                              Color(0xFF5B4FE9),
+                              Color(0xFF9C6ADE)
+                            ])),
+                      ),
+                      Positioned(
+                        bottom: -46,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: sch.surface,
+                              boxShadow: [
+                                BoxShadow(
+                                    color:
+                                        sch.shadow.withValues(alpha: 0.15),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3))
+                              ]),
+                          child: avatarCircle(),
+                        ),
+                      ),
+                    ]),
+                const SizedBox(height: 56),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                if (user.username.isNotEmpty)
+                  Text('@${user.username}',
                       style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: isAdmin
+                          fontSize: 13, color: sch.onSurfaceVariant)),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: isAdminUser
+                          ? const Color(0xFF5B4FE9).withValues(alpha: 0.10)
+                          : Colors.green.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Text(isAdminUser ? tr('Admin') : tr('User'),
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                          color: isAdminUser
                               ? const Color(0xFF5B4FE9)
-                              : sch.onSecondaryContainer)))),
-          const SizedBox(height: 10),
-          Text('@${user.username}',
-              style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
-          const Divider(height: 28),
-          row(tr('Username'), user.username),
-          row(tr('Email'), user.email),
-          row(tr('Phone'), user.phone),
-          row('Role', user.isAdmin ? tr('Admin') : tr('User')),
-        ]),
+                              : Colors.green)),
+                ),
+                const SizedBox(height: 18),
+                // ----------------------------------------- details card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                        color: sch.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: sch.outlineVariant)),
+                    child: Column(children: [
+                      profileRow(
+                          Icons.person_outline, tr('First Name'), user.firstName),
+                      profileRow(
+                          Icons.person_outline, tr('Last Name'), user.lastName),
+                      profileRow(
+                          Icons.alternate_email, tr('Username'), user.username),
+                      profileRow(Icons.mail_outline, tr('Email'), user.email),
+                      profileRow(Icons.phone_outlined, tr('Phone'), user.phone),
+                      profileRow(Icons.badge_outlined, tr('User ID'),
+                          user.id.toString()),
+                      profileRow(Icons.shield_outlined, tr('Role'),
+                          isAdminUser ? tr('Admin') : tr('User')),
+                      profileRow(Icons.calendar_today_outlined, tr('Joined'),
+                          _dateStr(user.createdAt)),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ]),
+            ),
+          ),
+        ),
       ),
     ]);
   }
@@ -3348,6 +3987,7 @@ class FeedbackTablePage extends StatelessWidget {
   final int page;
   final ValueChanged<int> onPage;
   final ValueChanged<String> onSearch;
+  final void Function(FeedbackItem) onOpen;
   final void Function(FeedbackItem) onDelete;
   const FeedbackTablePage(
       {super.key,
@@ -3356,6 +3996,7 @@ class FeedbackTablePage extends StatelessWidget {
       required this.page,
       required this.onPage,
       required this.onSearch,
+      required this.onOpen,
       required this.onDelete});
 
   @override
@@ -3375,7 +4016,7 @@ class FeedbackTablePage extends StatelessWidget {
           Expanded(flex: 5, child: CellText(tr('Message'), header: true)),
           Expanded(flex: 2, child: CellText(tr('Date'), header: true)),
           Expanded(
-              flex: 1,
+              flex: 2,
               child: Center(child: CellText(tr('Actions'), header: true))),
         ]));
 
@@ -3401,16 +4042,23 @@ class FeedbackTablePage extends StatelessWidget {
           Expanded(
               flex: 2,
               child: CellText(f.date.toLocal().toString().substring(0, 16))),
+          // View / Delete actions for this feedback row (centered so the
+          // Actions header sits directly above the buttons).
           Expanded(
-              flex: 1,
-              child: Align(
-                  alignment: Alignment.center,
-                  child: IconButton(
+              flex: 2,
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                IconButton(
+                    tooltip: tr('View detail'),
+                    onPressed: () => onOpen(f),
+                    icon: const Icon(Icons.visibility_outlined,
+                        size: 20, color: Color(0xFF5B4FE9))),
+                const SizedBox(width: 6),
+                IconButton(
                     tooltip: tr('Delete'),
                     onPressed: () => onDelete(f),
                     icon: const Icon(Icons.delete_outline,
-                        size: 20, color: Colors.redAccent),
-                  ))),
+                        size: 20, color: Colors.redAccent)),
+              ])),
         ]));
 
     return AdminTableScaffold(
@@ -3424,6 +4072,94 @@ class FeedbackTablePage extends StatelessWidget {
       header: headerRow(),
       rows: slice.map(row).toList(),
     );
+  }
+}
+
+class FeedbackDetailPage extends StatelessWidget {
+  final FeedbackItem feedback;
+  final VoidCallback onBack;
+  const FeedbackDetailPage(
+      {super.key, required this.feedback, required this.onBack});
+
+  String _dateStr(DateTime dt) {
+    final l = dt.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${l.year}-${two(l.month)}-${two(l.day)} '
+        '${two(l.hour)}:${two(l.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sch = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
+    final tr = l.t;
+    final f = feedback;
+    final name = f.name.isNotEmpty ? f.name : tr('Guest');
+
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(name,
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700))),
+      ]),
+      const SizedBox(height: 16),
+      _DetailCard(
+        avatar: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: sch.surface,
+              boxShadow: [
+                BoxShadow(
+                    color: sch.shadow.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3))
+              ]),
+          child: CircleAvatar(
+              radius: 42,
+              backgroundColor: sch.primaryContainer,
+              child: Text(
+                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                  style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF5B4FE9)))),
+        ),
+        title: Text(name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        subtitle: f.owner.isEmpty
+            ? null
+            : Text('@${f.owner}',
+                style: TextStyle(fontSize: 13, color: sch.onSurfaceVariant)),
+        badges: Row(mainAxisSize: MainAxisSize.min, children: [
+          for (var i = 1; i <= 5; i++)
+            Icon(i <= f.rating ? Icons.star : Icons.star_border,
+                size: 20, color: Colors.amber),
+          const SizedBox(width: 6),
+          Text('${f.rating}/5',
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700)),
+        ]),
+        rows: [
+          _DetailRow(Icons.person_outline, tr('Name'), name),
+          _DetailRow(Icons.alternate_email, tr('User'),
+              f.owner.isEmpty ? '' : '@${f.owner}'),
+          _DetailRow(Icons.star_outline, tr('Rating'), '${f.rating}/5'),
+          _DetailRow(Icons.calendar_today_outlined, tr('Date'),
+              _dateStr(f.date)),
+          if (f.productId != null)
+            _DetailRow(
+                Icons.inventory_2_outlined, tr('Product'), '#${f.productId}'),
+          _DetailRow(Icons.notes_outlined, tr('Message'),
+              f.message.isEmpty ? '' : l.feedbackMessage(f.message),
+              maxLines: 12),
+        ],
+      ),
+    ]);
   }
 }
 

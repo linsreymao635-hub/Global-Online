@@ -1,0 +1,216 @@
+Launching lib/main_user.dart on SM A065F (wireless) in debug mode...
+Running Gradle task 'assembleDebug'...                             23.4s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...          34.9s
+I/FlutterActivityAndFragmentDelegate(10386): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+D/FlutterJNI(10386): Beginning load of flutter...
+D/FlutterJNI(10386): flutter (null) was loaded normally!
+I/flutter (10386): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+D/FlutterRenderer(10386): Width is zero. 0,0
+Syncing files to device SM A065F (wireless)...                  
+D/HWUI    (10386): HWUI - treat SMPTE_170M as sRGB
+Syncing files to device SM A065F (wireless)...                     757ms
+
+Flutter run key commands.
+r Hot reload. 
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on SM A065F is available at: http://127.0.0.1:54597/deD1jhfSEHE=/
+The Flutter DevTools debugger and profiler on SM A065F is available at: http://127.0.0.1:54597/deD1jhfSEHE=/devtools/?uri=ws://127.0.0.1:54597/deD1jhfSEHE=/ws
+I/IDS_TAG (10386): Closing IDS observe window
+I/IDS_TAG (10386): Getting Shared Preference for android.app.Application@14a93f5 uid = 10394
+I/IDS_TAG (10386): IDS count updated to 1 for android.app.Application@14a93f5
+I/Choreographer(10386): Skipped 306 frames!  The application may be doing too much work on its main thread.
+I/WindowExtensionsImpl(10386): Initializing Window Extensions, vendor API level=6, activity embedding enabled=true
+I/SurfaceView@ea6eaa2(10386): onWindowVisibilityChanged(0) true io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ......I. 0,0-0,0} of VRI[MainActivity]@c9c8a4c
+D/SurfaceView(10386): 245820066 updateSurface: has no frame
+D/FlutterRenderer(10386): Width is zero. 0,0
+I/e_shop_mvp_full(10386): Compiler allocated 7482KB to compile void android.view.ViewRootImpl.performTraversals()
+D/BufferQueueConsumer(10386): [](id:289200000000,api:0,p:-1,c:10386) connect: controlledByApp=false
+I/BLASTBufferQueue(10386): [VRI[MainActivity]@c9c8a4c#0](f:0,a:0,s:0) constructor()
+I/BLASTBufferQueue_Java(10386): new BLASTBufferQueue, mName= VRI[MainActivity]@c9c8a4c mNativeObject= 0xb400007a7e0cf800 sc.mNativeObject= 0xb400007a1df026c0 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3397 android.view.ViewRootImpl.relayoutWindow:11361 android.view.ViewRootImpl.performTraversals:4544 android.view.ViewRootImpl.doTraversal:3708 android.view.ViewRootImpl$TraversalRunnable.run:12542 android.view.Choreographer$CallbackRecord.run:1751 android.view.Choreographer$CallbackRecord.run:1760 android.view.Choreographer.doCallbacks:1216 android.view.Choreographer.doFrame:1142 android.view.Choreographer$FrameDisplayEventReceiver.run:1707 
+I/BLASTBufferQueue_Java(10386): update, w= 720 h= 1600 mName = VRI[MainActivity]@c9c8a4c mNativeObject= 0xb400007a7e0cf800 sc.mNativeObject= 0xb400007a1df026c0 format= -3 caller= android.graphics.BLASTBufferQueue.<init>:88 android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3397 android.view.ViewRootImpl.relayoutWindow:11361 android.view.ViewRootImpl.performTraversals:4544 android.view.ViewRootImpl.doTraversal:3708 android.view.ViewRootImpl$TraversalRunnable.run:12542 
+I/BLASTBufferQueue(10386): [VRI[MainActivity]@c9c8a4c#0](f:0,a:0,s:0) update width=720 height=1600 format=-3 mTransformHint=0
+E/FBI     (10386): Can't load library: dlopen failed: library "libmagtsync.so" not found
+I/VRI[MainActivity]@c9c8a4c(10386): Relayout returned: old=(0,0,720,1600) new=(0,0,720,1600) relayoutAsync=false req=(720,1600)0 dur=29 res=0x3 s={true 0xb400007a1de84800} ch=true seqId=0
+D/VRI[MainActivity]@c9c8a4c(10386): mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007a1de84800} hwInitialized=true
+D/FlutterJNI(10386): Sending viewport metrics to the engine.
+D/SurfaceView(10386): 245820066 updateSurface: has no frame
+I/SurfaceView@ea6eaa2(10386): windowStopped(false) true io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ......ID 0,0-720,1600} of VRI[MainActivity]@c9c8a4c
+D/SurfaceView(10386): 245820066 updateSurface: has no frame
+D/VRI[MainActivity]@c9c8a4c(10386): reportNextDraw android.view.ViewRootImpl.performTraversals:5193 android.view.ViewRootImpl.doTraversal:3708 android.view.ViewRootImpl$TraversalRunnable.run:12542 android.view.Choreographer$CallbackRecord.run:1751 android.view.Choreographer$CallbackRecord.run:1760 
+I/SurfaceView(10386): 245820066 Changes: creating=true format=true size=true visible=true alpha=false hint=false visible=true left=true top=true z=false attached=true lifecycleStrategy=false
+D/BufferQueueConsumer(10386): [](id:289200000001,api:0,p:-1,c:10386) connect: controlledByApp=false
+I/BLASTBufferQueue(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1](f:0,a:0,s:0) constructor()
+I/BLASTBufferQueue_Java(10386): update, w= 720 h= 1600 mName = null mNativeObject= 0xb400007a7e0c2800 sc.mNativeObject= 0xb400007a1df02b40 format= 4 caller= android.view.SurfaceView.createBlastSurfaceControls:1642 android.view.SurfaceView.updateSurface:1318 android.view.SurfaceView.lambda$new$0:268 android.view.SurfaceView.$r8$lambda$NfZyM_TG8F8lqzaOVZ7noREFjzU:0 android.view.SurfaceView$$ExternalSyntheticLambda1.onPreDraw:0 android.view.ViewTreeObserver.dispatchOnPreDraw:1226 
+I/BLASTBufferQueue(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1](f:0,a:0,s:0) update width=720 height=1600 format=4 mTransformHint=0
+I/SurfaceView(10386): 245820066 Cur surface: Surface(name=null mNativeObject=0)/@0x6b545f1
+I/SurfaceView@ea6eaa2(10386): pST: sr = Rect(0, 0 - 720, 1600) sw = 720 sh = 1600
+D/SurfaceView(10386): 245820066 performSurfaceTransaction RenderWorker position = [0, 0, 720, 1600] surfaceSize = 720x1600
+I/SurfaceView@ea6eaa2(10386): updateSurface: mVisible = true mSurface.isValid() = true
+I/SurfaceView@ea6eaa2(10386): updateSurface: mSurfaceCreated = false surfaceChanged = true visibleChanged = true
+I/SurfaceView(10386): 245820066 visibleChanged -- surfaceCreated
+I/SurfaceView@ea6eaa2(10386): surfaceCreated 1 #8 io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ......ID 0,0-720,1600}
+D/e_shop_mvp_full(10386): Can't load libmbrainSDK
+I/SurfaceView(10386): 245820066 surfaceChanged -- format=4 w=720 h=1600
+I/SurfaceView@ea6eaa2(10386): surfaceChanged (720,1600) 1 #8 io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ......ID 0,0-720,1600}
+I/SurfaceView(10386): 245820066 surfaceRedrawNeeded
+V/SurfaceView(10386): Layout: x=0 y=0 w=720 h=1600, frame=Rect(0, 0 - 720, 1600)
+D/VRI[MainActivity]@c9c8a4c(10386): Canceling draw. cancelDueToPreDrawListener=true cancelDueToSync=false
+I/Choreographer(10386): Skipped 37 frames!  The application may be doing too much work on its main thread.
+I/GrallocExtra(10386): gralloc_extra_query:is_SW3D 0
+I/BLASTBufferQueue(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1](f:0,a:0,s:0) onFrameAvailable the first frame is available
+I/GrallocExtra(10386): gralloc_extra_query:is_SW3D 0
+I/BLASTBufferQueue(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1](f:0,a:1,s:0) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=247597910765372(auto) mPendingTransactions.size=0 graphicBufferId=44607530336266 transform=0
+D/e_shop_mvp_full(10386): Can't load libmbrainSDK
+I/e_shop_mvp_full(10386): Background concurrent mark compact GC freed 9567KB AllocSpace bytes, 29(4956KB) LOS objects, 64% free, 3319KB/9463KB, paused 313us,5.909ms total 46.617ms
+I/SurfaceView(10386): 245820066 finishedDrawing
+D/ProfileInstaller(10386): Installing profile for com.example.online_shop_mvp_full
+I/Choreographer(10386): Skipped 70 frames!  The application may be doing too much work on its main thread.
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/BLASTBufferQueue_Java(10386): update, w= 720 h= 1600 mName = VRI[MainActivity]@c9c8a4c mNativeObject= 0xb400007a7e0cf800 sc.mNativeObject= 0xb40000796330a200 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3386 android.view.ViewRootImpl.relayoutWindow:11361 android.view.ViewRootImpl.performTraversals:4544 android.view.ViewRootImpl.doTraversal:3708 android.view.ViewRootImpl$TraversalRunnable.run:12542 android.view.Choreographer$CallbackRecord.run:1751 
+I/VRI[MainActivity]@c9c8a4c(10386): Relayout returned: old=(0,0,720,1600) new=(0,0,720,1600) relayoutAsync=false req=(720,1600)0 dur=11 res=0x1 s={true 0xb400007a1de84800} ch=false seqId=0
+I/VRI[MainActivity]@c9c8a4c(10386): updateBoundsLayer: t=android.view.SurfaceControl$Transaction@67f57e5 sc=Surface(name=Bounds for - com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity@0)/@0x11e62ba frame=1
+D/VRI[MainActivity]@c9c8a4c(10386): reportNextDraw android.view.ViewRootImpl.performTraversals:5193 android.view.ViewRootImpl.doTraversal:3708 android.view.ViewRootImpl$TraversalRunnable.run:12542 android.view.Choreographer$CallbackRecord.run:1751 android.view.Choreographer$CallbackRecord.run:1760 
+D/VRI[MainActivity]@c9c8a4c(10386): Setup new sync=wmsSync-VRI[MainActivity]@c9c8a4c#1
+I/VRI[MainActivity]@c9c8a4c(10386): Creating new active sync group VRI[MainActivity]@c9c8a4c#2
+D/VRI[MainActivity]@c9c8a4c(10386): Draw frame after cancel
+D/VRI[MainActivity]@c9c8a4c(10386): registerCallbacksForSync syncBuffer=false
+D/SurfaceView(10386): 245820066 updateSurfacePosition RenderWorker, frameNr = 1, position = [0, 0, 720, 1600] surfaceSize = 720x1600
+I/SurfaceView@ea6eaa2(10386): uSP: rtp = Rect(0, 0 - 720, 1600) rtsw = 720 rtsh = 1600
+I/SurfaceView@ea6eaa2(10386): onSSPAndSRT: pl = 0 pt = 0 sx = 1.0 sy = 1.0
+I/SurfaceView@ea6eaa2(10386): aOrMT: VRI[MainActivity]@c9c8a4c t = android.view.SurfaceControl$Transaction@e6a78c8 fN = 1 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:1792 android.graphics.RenderNode$CompositePositionUpdateListener.positionChanged:398 
+I/VRI[MainActivity]@c9c8a4c(10386): mWNT: t=0xb400007a7e020a00 mBlastBufferQueue=0xb400007a7e0cf800 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1723 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:1792 
+D/VRI[MainActivity]@c9c8a4c(10386): Received frameDrawingCallback syncResult=0 frameNum=1.
+I/VRI[MainActivity]@c9c8a4c(10386): mWNT: t=0xb400007a1dfa2480 mBlastBufferQueue=0xb400007a7e0cf800 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$11.onFrameDraw:15016 android.view.ThreadedRenderer$1.onFrameDraw:761 <bottom of call stack> 
+I/VRI[MainActivity]@c9c8a4c(10386): Setting up sync and frameCommitCallback
+I/BLASTBufferQueue(10386): [VRI[MainActivity]@c9c8a4c#0](f:0,a:0,s:0) onFrameAvailable the first frame is available
+I/BLASTBufferQueue(10386): [VRI[MainActivity]@c9c8a4c#0](f:0,a:1,s:0) acquireNextBufferLocked size=720x1600 mFrameNumber=1 applyTransaction=true mTimestamp=247598386824142(auto) mPendingTransactions.size=0 graphicBufferId=44607530336271 transform=0
+I/VRI[MainActivity]@c9c8a4c(10386): Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+D/HWUI    (10386): CFMS:: SetUp Pid : 10386    Tid : 10442
+D/VRI[MainActivity]@c9c8a4c(10386): reportDrawFinished seqId=0
+I/HWUI    (10386): Davey! duration=1217ms; Flags=1, FrameTimelineVsyncId=105509893, IntendedVsync=247597171497819, Vsync=247598337238759, InputEventId=0, HandleInputStart=247598346582065, AnimationStart=247598346587295, PerformTraversalsStart=247598346589988, DrawStart=247598365934603, FrameDeadline=247597191497819, FrameInterval=247598345748757, FrameStartTime=16653442, SyncQueued=247598367781757, SyncStart=247598367961449, IssueDrawCommandsStart=247598373709988, SwapBuffers=247598383476219, FrameCompleted=247598388719295, DequeueBufferDuration=4115385, QueueBufferDuration=1392923, GpuCompleted=247598387145142, SwapBuffersCompleted=247598388719295, DisplayPresentTime=481039120321, CommandSubmissionCompleted=247598383476219, 
+D/VRI[MainActivity]@c9c8a4c(10386): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007a1de84800}
+D/InputMethodManagerUtils(10386): startInputInner - Id : 0
+I/InputMethodManager(10386): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+D/FlutterJNI(10386): Sending viewport metrics to the engine.
+D/InputTransport(10386): Input channel constructed: 'ClientS', fd=200
+I/InsetsController(10386): onStateChanged: host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity, from=android.view.ViewRootImpl.handleInsetsControlChanged:2888, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 720, 1600), mDisplayCutout=DisplayCutout{insets=Rect(0, 43 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(320, 0 - 400, 43), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=720 displayHeight=1600 physicalDisplayWidth=720 physicalDisplayHeight=1600 density={1.875} cutoutSpec={M 0,0 H -21.33333333333333 V 22.93333333333333 H 21.33333333333333 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=68, center=Point(68, 68)}, RoundedCorner{position=TopRight, radius=68, center=Point(652, 68)}, RoundedCorner{position=BottomRight, radius=68, center=Point(652, 1532)}, RoundedCorner{position=BottomLeft, radius=68, center=Point(68, 1532)}]}  mRoundedCornerFrame=Rect(0, 0 - 720, 1600), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(637, 0 - 720, 43) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=720 displayHeight=1600 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {bcad0000 mType=statusBars mFrame=[0,0][720,43] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {bcad0005 mType=mandatorySystemGestures mFrame=[0,0][720,66] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {bcad0006 mType=tappableElement mFrame=[0,0][720,43] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mVisible=false mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][720,43] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {4400001 mType=navigationBars mFrame=[0,1510][720,1600] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {4400004 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {4400005 mType=mandatorySystemGestures mFrame=[0,1510][720,1600] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {4400006 mType=tappableElement mFrame=[0,1510][720,1600] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {4400024 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null} }
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=false, type=ime, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/ImeFocusController(10386): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+I/ImeFocusController(10386): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+D/InputTransport(10386): Input channel destroyed: 'ClientS', fd=200
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/CredManProvService(10386): GetCredentialResponse error returned from framework
+I/flutter (10386): Google Sign-In DEVELOPER_ERROR: GoogleSignInException(code GoogleSignInExceptionCode.unknownError, [28444] Developer console is not set up correctly., null)
+I/flutter (10386): Web client (serverClientId) in use: 1021459048327-7odq6b4vl20b9d9lg1d3q2rkjnudo7q2.apps.googleusercontent.com
+I/flutter (10386): Installed APK signing SHA-1: 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2
+I/flutter (10386): Google sign-in failed: Google Sign-In setup incomplete: this app is not registered with Google. In console.cloud.google.com → APIs & Services → Credentials, create an OAuth client ID of type "Android" with package name com.example.online_shop_mvp_full and SHA-1 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2 (the fingerprint of THIS installed build), in the SAME project as your Web client. Save, wait a few minutes, then reinstall this build and try again.
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+W/WindowOnBackDispatcher(10386): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher(10386): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/VRI[MainActivity]@c9c8a4c(10386): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007a1de84800}
+D/InputMethodManagerUtils(10386): startInputInner - Id : 0
+I/InputMethodManager(10386): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+D/InputTransport(10386): Input channel constructed: 'ClientS', fd=191
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=false, type=ime, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/ImeFocusController(10386): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+I/ImeFocusController(10386): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+D/InputTransport(10386): Input channel destroyed: 'ClientS', fd=191
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/CredManProvService(10386): GetCredentialResponse error returned from framework
+I/flutter (10386): Google Sign-In DEVELOPER_ERROR: GoogleSignInException(code GoogleSignInExceptionCode.unknownError, [28444] Developer console is not set up correctly., null)
+I/flutter (10386): Web client (serverClientId) in use: 1021459048327-7odq6b4vl20b9d9lg1d3q2rkjnudo7q2.apps.googleusercontent.com
+I/flutter (10386): Installed APK signing SHA-1: 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2
+I/flutter (10386): Google sign-in failed: Google Sign-In setup incomplete: this app is not registered with Google. In console.cloud.google.com → APIs & Services → Credentials, create an OAuth client ID of type "Android" with package name com.example.online_shop_mvp_full and SHA-1 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2 (the fingerprint of THIS installed build), in the SAME project as your Web client. Save, wait a few minutes, then reinstall this build and try again.
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+W/WindowOnBackDispatcher(10386): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher(10386): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/VRI[MainActivity]@c9c8a4c(10386): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007a1de84800}
+D/InputMethodManagerUtils(10386): startInputInner - Id : 0
+I/InputMethodManager(10386): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+D/InputTransport(10386): Input channel constructed: 'ClientS', fd=194
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=false, type=ime, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/ImeFocusController(10386): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+I/ImeFocusController(10386): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+D/InputTransport(10386): Input channel destroyed: 'ClientS', fd=194
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/CredManProvService(10386): GetCredentialResponse error returned from framework
+I/flutter (10386): Google Sign-In DEVELOPER_ERROR: GoogleSignInException(code GoogleSignInExceptionCode.unknownError, [28444] Developer console is not set up correctly., null)
+I/flutter (10386): Web client (serverClientId) in use: 1021459048327-7odq6b4vl20b9d9lg1d3q2rkjnudo7q2.apps.googleusercontent.com
+I/flutter (10386): Installed APK signing SHA-1: 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2
+I/flutter (10386): Google sign-in failed: Google Sign-In setup incomplete: this app is not registered with Google. In console.cloud.google.com → APIs & Services → Credentials, create an OAuth client ID of type "Android" with package name com.example.online_shop_mvp_full and SHA-1 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2 (the fingerprint of THIS installed build), in the SAME project as your Web client. Save, wait a few minutes, then reinstall this build and try again.
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+W/WindowOnBackDispatcher(10386): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher(10386): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/VRI[MainActivity]@c9c8a4c(10386): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007a1de84800}
+D/InputMethodManagerUtils(10386): startInputInner - Id : 0
+I/InputMethodManager(10386): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+D/InputTransport(10386): Input channel constructed: 'ClientS', fd=187
+I/InsetsSourceConsumer(10386): applyRequestedVisibilityToControl: visible=false, type=ime, host=com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@c9c8a4c
+I/VRI[MainActivity]@c9c8a4c(10386): call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@c9c8a4c
+I/ImeFocusController(10386): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+I/ImeFocusController(10386): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+D/InputTransport(10386): Input channel destroyed: 'ClientS', fd=187
+I/VRI[MainActivity]@c9c8a4c(10386): handleAppVisibility mAppVisible = true visible = false
+D/VRI[MainActivity]@c9c8a4c(10386): visibilityChanged oldVisibility=true newVisibility=false
+I/SurfaceView@ea6eaa2(10386): onWindowVisibilityChanged(8) false io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ........ 0,0-720,1600} of VRI[MainActivity]@c9c8a4c
+I/SurfaceView(10386): 245820066 Changes: creating=false format=false size=false visible=true alpha=false hint=false visible=true left=false top=false z=false attached=true lifecycleStrategy=false
+I/SurfaceView(10386): 245820066 Cur surface: Surface(name=null mNativeObject=-5476376622406754304)/@0x6b545f1
+I/SurfaceView(10386): 245820066 surfaceDestroyed
+I/SurfaceView@ea6eaa2(10386): surfaceDestroyed callback.size 1 #2 io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ........ 0,0-720,1600}
+I/SurfaceView@ea6eaa2(10386): updateSurface: mVisible = false mSurface.isValid() = true
+I/BLASTBufferQueue(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1](f:0,a:1,s:0) destructor()
+D/BufferQueueConsumer(10386): [SurfaceView[com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity]@0#1(BLAST Consumer)1](id:289200000001,api:0,p:-1,c:10386) disconnect
+I/SurfaceView@ea6eaa2(10386): releaseSurfaces: viewRoot = VRI[MainActivity]@c9c8a4c
+V/SurfaceView(10386): Layout: x=0 y=0 w=720 h=1600, frame=Rect(0, 0 - 720, 1600)
+D/SurfaceView(10386): 2044826 windowPositionLost, frameNr = 0
+D/HWUI    (10386): CacheManager::trimMemory(20)
+I/GED     (10386): ged_boost_gpu_freq, level 100, eOrigin 2, final_idx 31, oppidx_max 31, oppidx_min 0
+I/BLASTBufferQueue(10386): [VRI[MainActivity]@c9c8a4c#0](f:0,a:1,s:0) destructor()
+D/BufferQueueConsumer(10386): [VRI[MainActivity]@c9c8a4c#0(BLAST Consumer)0](id:289200000000,api:0,p:-1,c:10386) disconnect
+I/VRI[MainActivity]@c9c8a4c(10386): Relayout returned: old=(0,0,720,1600) new=(0,0,720,1600) relayoutAsync=false req=(720,1600)8 dur=6 res=0x2 s={false 0x0} ch=true seqId=0
+I/SurfaceView@ea6eaa2(10386): windowStopped(true) false io.flutter.embedding.android.FlutterSurfaceView{ea6eaa2 V.E...... ........ 0,0-720,1600} of VRI[MainActivity]@c9c8a4c
+D/SurfaceView@ea6eaa2(10386): updateSurface: surface is not valid
+I/SurfaceView@ea6eaa2(10386): releaseSurfaces: viewRoot = VRI[MainActivity]@c9c8a4c
+D/VRI[MainActivity]@c9c8a4c(10386): applyTransactionOnDraw applyImmediately
+D/SurfaceView@ea6eaa2(10386): updateSurface: surface is not valid
+I/SurfaceView@ea6eaa2(10386): releaseSurfaces: viewRoot = VRI[MainActivity]@c9c8a4c
+D/VRI[MainActivity]@c9c8a4c(10386): applyTransactionOnDraw applyImmediately
+D/VRI[MainActivity]@c9c8a4c(10386): Not drawing due to not visible. Reason=!mAppVisible && !mForceDecorViewVisibility
+D/VRI[MainActivity]@c9c8a4c(10386): Pending transaction will not be applied in sync with a draw due to view not visible
+D/HWUI    (10386): CacheManager::trimMemory(20)
+I/GED     (10386): ged_boost_gpu_freq, level 100, eOrigin 2, final_idx 31, oppidx_max 31, oppidx_min 0
+I/VRI[MainActivity]@c9c8a4c(10386): stopped(true) old = false
+D/VRI[MainActivity]@c9c8a4c(10386): WindowStopped on com.example.online_shop_mvp_full/com.example.online_shop_mvp_full.MainActivity set to true
+D/HWUI    (10386): CacheManager::trimMemory(20)
+I/GED     (10386): ged_boost_gpu_freq, level 100, eOrigin 2, final_idx 31, oppidx_max 31, oppidx_min 0
+D/SurfaceView@ea6eaa2(10386): updateSurface: surface is not valid
+I/SurfaceView@ea6eaa2(10386): releaseSurfaces: viewRoot = VRI[MainActivity]@c9c8a4c
+D/VRI[MainActivity]@c9c8a4c(10386): applyTransactionOnDraw applyImmediately
+D/SurfaceView@ea6eaa2(10386): updateSurface: surface is not valid
+I/SurfaceView@ea6eaa2(10386): releaseSurfaces: viewRoot = VRI[MainActivity]@c9c8a4c
+D/VRI[MainActivity]@c9c8a4c(10386): applyTransactionOnDraw applyImmediately
+Lost connection to device.

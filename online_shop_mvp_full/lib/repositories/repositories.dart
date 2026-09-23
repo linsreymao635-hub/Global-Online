@@ -33,6 +33,27 @@ class AuthRepository {
     await AppSettings.markSessionCloudOk(ok);
     return u;
   }
+
+  /// Register a Telegram account (returned by the Login Widget) in the shared
+  /// cloud directory so the admin and other devices can see it, mirroring
+  /// [googleLogin]. The Telegram payload already carries the user's real name,
+  /// @username (e.g. Lin_Sreymao) and photo — no password is stored because
+  /// the account can only sign in via Telegram. This is what turns a Telegram
+  /// sign-in into a real, shared account instead of a throwaway guest.
+  Future<User?> telegramLogin(User u) async {
+    final ok = await SupabaseService.instance.upsertUser({
+      'username': u.username.trim().toLowerCase(),
+      'first_name': u.firstName,
+      'last_name': u.lastName,
+      'email': u.email,
+      'phone': u.phone,
+      'image': u.image ?? '',
+      'provider': 'telegram',
+      'is_admin': false,
+    }).catchError((_) => false);
+    await AppSettings.markSessionCloudOk(ok);
+    return u;
+  }
 }
 
 class ProductRepository {

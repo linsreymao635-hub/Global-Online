@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -21,6 +22,7 @@ import '../presenters/presenters.dart';
 import '../repositories/repositories.dart';
 import '../services/api_service.dart';
 import '../services/app_settings.dart';
+import '../services/google_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/telegram_auth_service.dart';
 
@@ -41,20 +43,226 @@ ImageProvider? userImage(String? s) {
   return NetworkImage(s);
 }
 
+/// Full-screen explanation of how to make "Continue with Telegram" work:
+/// create a bot with @BotFather, register the login-page origin as the bot's
+/// Allowed URL, and store both in the app. Shown when Telegram sign-in is
+/// tapped without setup, and from Settings → Telegram Sign-In.
+Future<void> _showTelegramSetup(BuildContext c) async {
+  final l = AppLocalizations.of(c).t;
+  final botCtl = TextEditingController(text: TelegramAuthService.botUsername);
+  final originCtl = TextEditingController(text: TelegramAuthService.allowedOrigin);
+  final origin = TelegramAuthService.allowedOrigin;
+  final saved = await showDialog<bool>(
+    context: c,
+    builder: (dc) => AlertDialog(
+      title: Text(l('Telegram Sign-In')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l('One-time setup — then every user can log in with their own Telegram account:'),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Text(l('1. In Telegram, open @BotFather → /newbot → create a bot '
+                '(its username must end with "bot").')),
+            Text(l('2. Still in @BotFather, open your bot → Login Widget → add '
+                'this exact Allowed URL:')),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Theme.of(dc).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      origin.isEmpty
+                          ? l('Add a short link to your shop first (step 3) and paste it here')
+                          : origin,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: l('Copy'),
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: origin.isEmpty
+                      ? null
+                      : () => Clipboard.setData(ClipboardData(text: origin)),
+                ),
+              ]),
+            ),
+            Text(l('3. Create a free short link for your shop (for example on '
+                'tinyurl.com) that opens this app, and paste it below:')),
+            const SizedBox(height: 10),
+            TextField(
+              controller: botCtl,
+              decoration: InputDecoration(
+                labelText: l('Telegram bot username'),
+                hintText: 'MyShopBot',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: originCtl,
+              decoration: InputDecoration(
+                labelText: l('Allowed URL (link that opens this app)'),
+                hintText: 'https://myshop.tinyurl.com',
+              ),
+            ),
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () => launchUrl(Uri.parse('https://t.me/BotFather'),
+                  mode: LaunchMode.externalApplication),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  const Icon(Icons.open_in_new, size: 16),
+                  const SizedBox(width: 6),
+                  Text(l('Open @BotFather'),
+                      style: const TextStyle(
+                          color: Color(0xFF2AABEE),
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dc, false),
+            child: Text(l('Cancel'))),
+        FilledButton(
+            onPressed: () => Navigator.pop(dc, true),
+            child: Text(l('Save'))),
+      ],
+    ),
+  );
+  if (saved == true) {
+    await AppSettings.saveTelegramBotUsername(botCtl.text);
+    await AppSettings.saveTelegramAllowedOrigin(originCtl.text);
+    if (c.mounted) {
+      ScaffoldMessenger.of(c).showSnackBar(SnackBar(
+          content: Text(TelegramAuthService.isConfigured
+              ? l('Telegram bot username saved')
+              : l('Telegram sign-in is not configured yet'))));
+    }
+  }
+  botCtl.dispose();
+  originCtl.dispose();
+}
+
+/// Explains the exact Google Cloud Console fix for the current platform.
+/// [message] is the actionable text produced by [GoogleAuthService].
+Future<void> _showGoogleSetup(BuildContext c, String message) async {
+  final l = AppLocalizations.of(c).t;
+  await showDialog<void>(
+    context: c,
+    builder: (dc) => AlertDialog(
+      title: Text(l('Google Sign-In setup')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(message),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () => launchUrl(
+                  Uri.parse('https://console.cloud.google.com/apis/credentials'),
+                  mode: LaunchMode.externalApplication),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  const Icon(Icons.open_in_new, size: 16),
+                  const SizedBox(width: 6),
+                  Text(l('Open Google Cloud Console'),
+                      style: TextStyle(
+                          color: Theme.of(dc).colorScheme.primary,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+            onPressed: () => Navigator.pop(dc), child: Text(l('OK'))),
+      ],
+    ),
+  );
+}
+
 class SocialButtons extends StatefulWidget {
   final void Function(User) onLogin;
   final Future<User?> Function() googleLogin;
+  final Future<User?> Function(User) telegramLogin;
   const SocialButtons(
-      {super.key, required this.onLogin, required this.googleLogin});
+      {super.key,
+      required this.onLogin,
+      required this.googleLogin,
+      required this.telegramLogin});
   @override
   State<SocialButtons> createState() => _SocialButtonsState();
 }
 
 class _SocialButtonsState extends State<SocialButtons> {
-  bool _busy = false;
+  bool _busyGoogle = false;
+  bool _busyTelegram = false;
+
+  bool get _busy => _busyGoogle || _busyTelegram;
+
+  /// Map ANY sign-in failure to one short, human message. Technical details
+  /// (exception classes, error codes, client configuration problems) are
+  /// never shown to the user — they stay in the debug console.
+  /// The one exception: [GoogleSignInSetupException] already carries a
+  /// user-actionable fix (which URL to register where) — show it verbatim.
+  String _friendlyError(Object e) {
+    if (e is GoogleSignInSetupException) return e.message;
+    final s = e.toString().toLowerCase();
+    if (s.contains('socket') ||
+        s.contains('network') ||
+        s.contains('http') ||
+        s.contains('connection') ||
+        s.contains('timeout')) {
+      return AppLocalizations.of(context).t(
+          'Unable to connect to the server. Please check your internet connection and try again.');
+    }
+    // Android DEVELOPER_ERROR can surface as a raw PlatformException code
+    // (not only through the plugin's description mapping) — always show the
+    // actionable console fix instead of a generic "try again".
+    if (s.contains('developer_error') ||
+        s.contains('developer console') ||
+        s.contains('10:') ||
+        s.contains('12500')) {
+      return AppLocalizations.of(context).t(
+          'Google Sign-In setup incomplete: this app is not registered with '
+          'Google. In console.cloud.google.com → APIs & Services → '
+          'Credentials, create an OAuth client ID of type "Android" with '
+          'package name com.example.online_shop_mvp_full and this computer\'s '
+          'debug SHA-1, in the SAME project as your Web client. Save, wait a '
+          'few minutes, then rebuild and run the app again.');
+    }
+    return AppLocalizations.of(context)
+        .t('Google Sign-In is currently unavailable. Please try again.');
+  }
+
+  void _showError(String message, {bool long = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message),
+        width: 420,
+        duration: Duration(seconds: long ? 8 : 3),
+        behavior: SnackBarBehavior.floating));
+  }
 
   Future<void> _google() async {
-    setState(() => _busy = true);
+    if (_busy) return; // one flow at a time — no duplicate requests
+    setState(() => _busyGoogle = true);
     try {
       final u = await widget.googleLogin();
       if (!mounted) return;
@@ -68,24 +276,34 @@ class _SocialButtonsState extends State<SocialButtons> {
       if (!mounted) return;
       // A failed Google sign-in must NOT log the user in as a different
       // (guest) account, otherwise Login info and Profile info diverge.
-      // Surface the actual error and let the user retry.
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      debugPrint('Google sign-in failed: $e');
+      if (e is GoogleSignInSetupException) {
+        // Setup problems need the full fix — show a dialog with the exact
+        // steps, the SHA-1 and a direct link to the Google Cloud Console
+        // instead of a snackbar that cuts the message off.
+        await _showGoogleSetup(context, e.message);
+      } else {
+        _showError(_friendlyError(e));
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyGoogle = false);
     }
   }
 
   Future<void> _telegram() async {
-    // A real Telegram login needs a bot whose username ends with "bot".
-    // With no valid bot the widget cannot load — skip straight to the shop
-    // as a guest. No error screens, no bot-name warnings.
+    if (_busy) return; // one flow at a time — no duplicate requests
+    // A real Telegram login needs (1) a bot created with @BotFather whose
+    // username ends with "bot" and (2) the login page origin registered as
+    // the bot's Allowed URL. When nothing is configured yet, do NOT stop the
+    // user at a setup dialog: they came to shop, so let them straight in as
+    // a guest and go to the shop. Settings → Telegram Sign-In still offers
+    // the real bot login for anyone who wants to set it up.
     if (!TelegramAuthService.isConfigured ||
         !TelegramAuthService.botLooksValid(TelegramAuthService.botUsername)) {
       widget.onLogin(guestUser());
       return;
     }
-    setState(() => _busy = true);
+    setState(() => _busyTelegram = true);
     try {
       final u = await Navigator.push<User>(
         context,
@@ -93,18 +311,27 @@ class _SocialButtonsState extends State<SocialButtons> {
       );
       if (!mounted) return;
       if (u != null) {
-        // Real Telegram account selected → go straight to the shop.
+        // Real Telegram account selected. Register it in the shared cloud
+        // directory (provider: 'telegram') so the admin and other devices
+        // can see the account with its real @username (e.g. Lin_Sreymao)
+        // and photo — without this the sign-in is local-only and looks
+        // like a guest.
+        await widget.telegramLogin(u);
         widget.onLogin(u);
         return;
       }
-    } catch (_) {
+      // The page closed without an account = the user cancelled. Stay on
+      // the login screen — never silently swap them to a guest session.
+      _showError(AppLocalizations.of(context)
+          .t('Telegram sign-in was cancelled.'));
+    } catch (e) {
+      debugPrint('Telegram sign-in failed: $e');
       if (!mounted) return;
+      _showError(AppLocalizations.of(context).t(
+          'Unable to connect to the server. Please check your internet connection and try again.'));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyTelegram = false);
     }
-    // Telegram didn't complete (canceled, widget didn't load, network issue,
-    // etc.) — enter as guest so the user always reaches the shop page.
-    widget.onLogin(guestUser());
   }
 
   @override
@@ -118,13 +345,13 @@ class _SocialButtonsState extends State<SocialButtons> {
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black87,
-              minimumSize: const Size.fromHeight(52),
+              minimumSize: const Size.fromHeight(54),
               side: BorderSide(color: Colors.grey.shade300),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28)),
             ),
             onPressed: _busy ? null : _google,
-            icon: _busy
+            icon: _busyGoogle
                 ? const SizedBox(
                     width: 20,
                     height: 20,
@@ -148,12 +375,20 @@ class _SocialButtonsState extends State<SocialButtons> {
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF2AABEE),
               foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
+              minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28)),
             ),
             onPressed: _busy ? null : _telegram,
-            icon: const Icon(Icons.send, size: 20),
+            icon: _busyTelegram
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                // Telegram paper-plane logo look: white plane on the
+                // brand-blue button.
+                : const Icon(Icons.send, size: 20),
             label: Text(tr('Continue with Telegram'),
                 style:
                     const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -173,10 +408,58 @@ class TelegramLoginPage extends StatefulWidget {
 class _TelegramLoginPageState extends State<TelegramLoginPage> {
   bool _failed = false;
   bool _loaded = false;
+  bool _hint = false; // shown when Telegram never takes over the page
+  bool _done = false;
+  Timer? _hintTimer;
 
   void _onAuth(String json) {
     final u = TelegramAuthService.userFromJson(json);
-    if (u != null && mounted) Navigator.pop(context, u);
+    if (u != null && mounted && !_done) {
+      _done = true;
+      _hintTimer?.cancel();
+      Navigator.pop(context, u);
+    }
+  }
+
+  /// The confirm redirect Telegram fires after the user approves in the
+  /// Telegram app: same page with `#tgAuthResult=<base64url payload>`.
+  void _onUrl(String? rawUrl) {
+    if (rawUrl == null || rawUrl.isEmpty || _done) return;
+    final Uri u;
+    try {
+      u = Uri.parse(rawUrl);
+    } on FormatException {
+      return;
+    }
+    final raw = u.toString();
+    User? user;
+    if (u.fragment.contains('tgAuthResult=')) {
+      user = TelegramAuthService.userFromTgAuthResult(u.fragment);
+    } else if (u.scheme == 'http' &&
+        u.fragment.isEmpty &&
+        u.queryParameters['tgAuthResult'] != null) {
+      user = TelegramAuthService
+          .userFromTgAuthResult('tgAuthResult=${u.queryParameters['tgAuthResult']}');
+    } else if (raw.contains('tgAuthResult=')) {
+      user = TelegramAuthService.userFromTgAuthResult(raw);
+    }
+    if (user != null && mounted) {
+      _done = true;
+      _hintTimer?.cancel();
+      Navigator.pop(context, user);
+    }
+  }
+
+  /// The confirm step runs inside the Telegram app. Without an app link the
+  /// page can also deep-link out via tg:// — open it externally so the user
+  /// lands in Telegram instead of a dead webview.
+  Future<bool> _openExternally(String url) async {
+    try {
+      return await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false; // nothing on the device can open it (e.g. no Telegram)
+    }
   }
 
   late final WebViewController _controller = WebViewController()
@@ -189,6 +472,21 @@ class _TelegramLoginPageState extends State<TelegramLoginPage> {
       onPageFinished: (url) {
         if (mounted) setState(() => _loaded = true);
       },
+      onUrlChange: (change) => _onUrl(change.url),
+      onNavigationRequest: (req) {
+        final url = req.url;
+        if (url.startsWith('tg://')) {
+          _openExternally(url).then((ok) {
+            if (!ok && mounted) setState(() => _hint = true);
+          });
+          return NavigationDecision.prevent;
+        }
+        if (url.contains('tgAuthResult=')) {
+          _onUrl(url);
+          return NavigationDecision.prevent;
+        }
+        return NavigationDecision.navigate;
+      },
     ))
     ..addJavaScriptChannel(
       'TelegramLogin',
@@ -199,11 +497,20 @@ class _TelegramLoginPageState extends State<TelegramLoginPage> {
     setState(() {
       _failed = false;
       _loaded = false;
+      _hint = false;
+    });
+    _hintTimer?.cancel();
+    _hintTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted && !_done && !_failed) setState(() => _hint = true);
     });
     try {
+      final origin = TelegramAuthService.allowedOrigin;
       await _controller.loadHtmlString(
         TelegramAuthService.widgetHtml(),
-        baseUrl: TelegramAuthService.baseUrl,
+        // Serving the widget from the bot's registered Allowed origin is what
+        // makes Telegram show the confirm step. A plain origin (no scheme)
+        // is not a valid base URL — fall back to the default then.
+        baseUrl: origin.startsWith('http') ? origin : TelegramAuthService.baseUrl,
       );
     } catch (_) {
       if (mounted) setState(() => _failed = true);
@@ -217,16 +524,84 @@ class _TelegramLoginPageState extends State<TelegramLoginPage> {
   }
 
   @override
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext c) {
     final tr = AppLocalizations.of(c).t;
     final sch = Theme.of(c).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Continue with Telegram'))),
+      appBar: AppBar(
+        title: Text(tr('Continue with Telegram')),
+        actions: [
+          IconButton(
+            tooltip: tr('Setup'),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => _showTelegramSetup(c),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
           if (!_loaded && !_failed)
             const Center(child: CircularProgressIndicator()),
+          if (_hint && !_failed && !_done)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(Icons.info_outline, color: sch.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(tr('Waiting for Telegram to confirm…'),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text(
+                        tr('If nothing opens in Telegram, the bot\'s Login '
+                            'Widget has no Allowed URL yet. Add this app\'s '
+                            'link as the Allowed URL in @BotFather, then try '
+                            'again.'),
+                        style: TextStyle(
+                            fontSize: 13, color: sch.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        TextButton(
+                          onPressed: () => _showTelegramSetup(c),
+                          child: Text(tr('Open setup')), 
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: Text(tr('Retry')),
+                          ),
+                        ),
+                      ]),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_failed)
             Center(
               child: Padding(
@@ -285,9 +660,15 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
   final fCpass = FocusNode();
   bool busy = false;
   bool show = false;
+  bool showConfirm = false;
+  Timer? _resendTimer;
+  int _resendIn = 0; // seconds left before Resend code is enabled
 
   void msg(String x) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(x)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(x),
+          width: 360,
+          behavior: SnackBarBehavior.floating));
 
   String rnd() => (100000 + Random().nextInt(900000)).toString();
 
@@ -301,50 +682,71 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
       busy = true;
       code = rnd();
     });
-    await Future.delayed(const Duration(milliseconds: 600));
+    // The code is generated locally (demo flow) — there is no network call
+    // to wait for, so the dialog appears immediately. No artificial delay.
     if (!mounted) return;
     setState(() => busy = false);
-    await showDialog<void>(
-      context: context,
-      builder: (dc) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        icon: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
+    // Start the resend countdown (30s) — prevents code-request spam.
+    _resendTimer?.cancel();
+    setState(() => _resendIn = 30);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _resendIn = _resendIn > 0 ? _resendIn - 1 : 0);
+      if (_resendIn == 0) t.cancel();
+    });
+    if (step == 1) {
+      await showDialog<void>(
+        context: context,
+        builder: (dc) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.sms_outlined, size: 30, color: Colors.green),
           ),
-          child: const Icon(Icons.sms_outlined, size: 30, color: Colors.green),
-        ),
-        title: Text(tr('Verification code'),
+          title: Text(tr('Verification code'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          content: Text(
+            '${tr('We sent a code to')} ${phone.text.trim()}\n\n$code',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
-        content: Text(
-          '${tr('We sent a code to')} ${phone.text.trim()}\n\n$code',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: Theme.of(dc).colorScheme.primary),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(dc);
-              setState(() => step = 2);
-            },
-            child: Text(tr('Continue')),
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
+                color: Theme.of(dc).colorScheme.primary),
           ),
-        ],
-      ),
-    );
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dc);
+                setState(() => step = 2);
+              },
+              child: Text(tr('Continue')),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Resend from step 2: no dialog again — just a confirmation snackbar.
+      msg(tr('A new code was sent'));
+    }
   }
 
   void verifyCode() {
     final tr = AppLocalizations.of(context).t;
+    if (codeInput.text.trim().length < 6) {
+      msg(tr('Please enter the 6-digit code'));
+      return;
+    }
     if (codeInput.text.trim() != code) {
       msg(tr('Wrong code. Check your phone.'));
       return;
@@ -371,7 +773,7 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
     }
     setState(() => busy = true);
     await AppSettings.setLocalPassword(username, npass.text);
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Saved — no artificial wait: respond as soon as the write completes.
     if (!mounted) return;
     setState(() => busy = false);
     await showDialog<void>(
@@ -453,6 +855,7 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     phone.dispose();
     codeInput.dispose();
     npass.dispose();
@@ -573,13 +976,17 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
                     node: fCpass,
                     action: TextInputAction.done,
                     onSubmit: (_) => resetPassword(),
-                    obscure: !show,
+                    obscure: !showConfirm,
                     keyboard: TextInputType.visiblePassword,
                     suffix: IconButton(
-                      icon: Icon(show
+                      tooltip: showConfirm
+                          ? tr('Hide password')
+                          : tr('Show password'),
+                      icon: Icon(showConfirm
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined),
-                      onPressed: () => setState(() => show = !show),
+                      onPressed: () =>
+                          setState(() => showConfirm = !showConfirm),
                     )),
               ],
               const SizedBox(height: 20),
@@ -592,13 +999,19 @@ class _ForgotPassword extends State<ForgotPasswordPage> {
                 Align(
                   alignment: Alignment.center,
                   child: TextButton.icon(
-                    onPressed: () {
-                      code = '';
-                      codeInput.clear();
-                      sendCode();
-                    },
+                    // Countdown blocks code-request spam; disabled while the
+                    // countdown runs or a send is in progress.
+                    onPressed: _resendIn > 0 || busy
+                        ? null
+                        : () {
+                            codeInput.clear();
+                            sendCode();
+                          },
                     icon: const Icon(Icons.refresh, size: 18),
-                    label: Text(tr('Resend code')),
+                    label: Text(_resendIn > 0
+                        ? tr('Resend code in')
+                            .replaceFirst('%d', '$_resendIn')
+                        : tr('Resend code')),
                   ),
                 ),
               ] else
@@ -849,20 +1262,65 @@ class _Login extends State<LoginPage> {
   bool busy = false;
   bool show = false;
 
+  // Per-field error text — shown right under the related field.
+  String? _userError;
+  String? _passError;
+
   void msg(String x) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(x)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(x),
+          width: 360,
+          behavior: SnackBarBehavior.floating));
+
+  /// Map any low-level failure to one short human message; technical
+  /// details stay in the debug console only.
+  String _friendlyError(Object e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('socket') ||
+        s.contains('network') ||
+        s.contains('xmlhttprequest') ||
+        s.contains('connection') ||
+        s.contains('timeout') ||
+        s.contains('clientexception')) {
+      return AppLocalizations.of(context).t(
+          'Unable to connect to the server. Please check your internet connection and try again.');
+    }
+    final raw = e.toString().replaceFirst('Exception: ', '');
+    return AppLocalizations.of(context).t(raw);
+  }
+
+  /// Client-side validation BEFORE any request is sent: the fields are
+  /// required and the password must be long enough to be plausible.
+  bool _validate() {
+    setState(() {
+      _userError = u.text.trim().isEmpty
+          ? AppLocalizations.of(context).t('Please enter your phone number or username')
+          : null;
+      _passError = p.text.isEmpty
+          ? AppLocalizations.of(context).t('Please enter your password')
+          : p.text.length < 6
+              ? AppLocalizations.of(context).t('Password must be at least 6 characters')
+              : null;
+    });
+    return _userError == null && _passError == null;
+  }
 
   Future<void> go() async {
-    setState(() => busy = true);
+    FocusScope.of(context).unfocus();
+    if (!_validate()) return; // never send a request with empty fields
+    setState(() => busy = true); // blocks the button until the future ends
     try {
       final x = await widget.p.login(u.text, p.text);
+      if (!mounted) return;
       if (x == null) {
-        msg(AppLocalizations.of(context).t('Login failed'));
+        msg(AppLocalizations.of(context)
+            .t('Incorrect phone/email or password.'));
       } else {
         widget.success(x);
       }
     } catch (e) {
-      msg(e.toString().replaceFirst('Exception: ', ''));
+      if (!mounted) return;
+      msg(_friendlyError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -870,12 +1328,19 @@ class _Login extends State<LoginPage> {
 
   // Outlined, focus-aware field style (replaces the old flat grey boxes:
   // now there is a visible border, a subtle fill and a colored focus ring).
-  Widget field(
-          BuildContext c, TextEditingController ctrl, String t, IconData icon,
-          {bool obscure = false, Widget? suffix}) =>
+  Widget field(BuildContext c, TextEditingController ctrl, String t, IconData icon,
+          {bool obscure = false,
+          Widget? suffix,
+          String? error,
+          TextInputAction? action,
+          ValueChanged<String>? onSubmit,
+          TextInputType? keyboard}) =>
       TextField(
         controller: ctrl,
         obscureText: obscure,
+        textInputAction: action,
+        onSubmitted: onSubmit,
+        keyboardType: keyboard,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           hintText: t,
@@ -883,6 +1348,7 @@ class _Login extends State<LoginPage> {
               color: Theme.of(c).colorScheme.onSurfaceVariant, fontSize: 16),
           prefixIcon: Icon(icon, size: 22),
           suffixIcon: suffix,
+          errorText: error,
           filled: true,
           fillColor: Theme.of(c).colorScheme.surfaceContainerLowest,
           contentPadding:
@@ -1023,11 +1489,18 @@ class _Login extends State<LoginPage> {
       const SizedBox(height: 28),
       // One field for everyone: customers sign in with their
       // username, the admin signs in with the admin phone number.
-      field(c, u, tr('Phone number or Username'), Icons.phone_android),
+      field(c, u, tr('Phone number or Username'), Icons.phone_android,
+          error: _userError,
+          action: TextInputAction.next,
+          onSubmit: (_) => FocusScope.of(c).nextFocus()),
       const SizedBox(height: 16),
       field(c, p, tr('Password'), Icons.lock_outline,
           obscure: !show,
+          error: _passError,
+          action: TextInputAction.done,
+          onSubmit: (_) => go(),
           suffix: IconButton(
+            tooltip: show ? tr('Hide password') : tr('Show password'),
             icon: Icon(show
                 ? Icons.visibility_off_outlined
                 : Icons.visibility_outlined),
@@ -1100,7 +1573,9 @@ class _Login extends State<LoginPage> {
         ]),
         const SizedBox(height: 18),
         SocialButtons(
-            onLogin: widget.success, googleLogin: widget.p.googleLogin),
+            onLogin: widget.success,
+            googleLogin: widget.p.googleLogin,
+            telegramLogin: widget.p.telegramLogin),
       ],
       // The admin account is desktop-only: on phones there is no
       // admin login hint at all. Hidden entirely in the user-only
@@ -1294,11 +1769,68 @@ class _Signup extends State<SignupPage> {
   final ncp = FocusNode();
   bool busy = false;
   bool show = false;
+  bool showConfirm = false;
+
+  // Per-field validation errors, shown right under the related field.
+  String? _fErr, _lErr, _eErr, _emErr, _pErr, _cpErr;
 
   void msg(String x) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(x)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(x),
+          width: 360,
+          behavior: SnackBarBehavior.floating));
+
+  /// Map any low-level failure to a short human message.
+  String _friendlyError(Object e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('socket') ||
+        s.contains('network') ||
+        s.contains('xmlhttprequest') ||
+        s.contains('connection') ||
+        s.contains('timeout') ||
+        s.contains('clientexception')) {
+      return AppLocalizations.of(context).t(
+          'Unable to connect to the server. Please check your internet connection and try again.');
+    }
+    final raw = e.toString().replaceFirst('Exception: ', '');
+    return AppLocalizations.of(context).t(raw);
+  }
+
+  /// Validate every field up front; each error appears under its own field.
+  bool _validate() {
+    final t = AppLocalizations.of(context).t;
+    bool ok = true;
+    String? req(String v) =>
+        v.trim().isEmpty ? t('This field is required') : null;
+    setState(() {
+      _fErr = req(f.text);
+      _lErr = req(l.text);
+      _eErr = req(e.text);
+      if (_eErr == null && e.text.trim().length < 8) {
+        _eErr = t('Please enter a valid phone number');
+      }
+      _emErr = req(em.text);
+      if (_emErr == null && !em.text.contains('@')) {
+        _emErr = t('Please enter a valid email address');
+      }
+      _pErr = p.text.isEmpty
+          ? t('This field is required')
+          : p.text.length < 6
+              ? t('Password must be at least 6 characters')
+              : null;
+      _cpErr = cp.text.isEmpty
+          ? t('This field is required')
+          : cp.text != p.text
+              ? t('Passwords do not match')
+              : null;
+      ok = [_fErr, _lErr, _eErr, _emErr, _pErr, _cpErr].every((x) => x == null);
+    });
+    return ok;
+  }
 
   Future<void> go() async {
+    FocusScope.of(context).unfocus();
+    if (!_validate()) return; // field errors shown — nothing sent
     final uname = (f.text.trim() + l.text.trim())
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]'), '');
@@ -1335,7 +1867,8 @@ class _Signup extends State<SignupPage> {
             phone: e.text.trim()));
       }
     } catch (e2) {
-      msg(e2.toString().replaceFirst('Exception: ', ''));
+      if (!mounted) return;
+      msg(_friendlyError(e2));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1348,7 +1881,8 @@ class _Signup extends State<SignupPage> {
       FocusNode? node,
       bool autofocus = false,
       TextInputAction? action,
-      ValueChanged<String>? onSubmit}) {
+      ValueChanged<String>? onSubmit,
+      String? error}) {
     final sch = Theme.of(context).colorScheme;
     final base = OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -1366,6 +1900,7 @@ class _Signup extends State<SignupPage> {
         labelText: t,
         prefixIcon: Icon(icon),
         suffixIcon: trailing,
+        errorText: error,
         filled: true,
         fillColor: sch.surfaceContainerLowest,
         contentPadding:
@@ -1379,9 +1914,14 @@ class _Signup extends State<SignupPage> {
     );
   }
 
-  Widget eye() => IconButton(
-        icon: Icon(show ? Icons.visibility_off : Icons.visibility),
-        onPressed: () => setState(() => show = !show),
+  Widget eye({bool? visible, ValueChanged<bool>? onToggle}) => IconButton(
+        tooltip: (visible ?? show) ? 'Hide password' : 'Show password',
+        icon: Icon((visible ?? show)
+            ? Icons.visibility_off
+            : Icons.visibility),
+        onPressed: () => onToggle != null
+            ? onToggle(!(visible ?? show))
+            : setState(() => show = !show),
       );
 
   @override
@@ -1490,6 +2030,7 @@ class _Signup extends State<SignupPage> {
                                     node: nf,
                                     autofocus: true,
                                     action: TextInputAction.next,
+                                    error: _fErr,
                                     onSubmit: (_) => nl.requestFocus()),
                               ),
                               const SizedBox(width: 12),
@@ -1498,6 +2039,7 @@ class _Signup extends State<SignupPage> {
                                     l, tr('Last name'), Icons.person_outline,
                                     node: nl,
                                     action: TextInputAction.next,
+                                    error: _lErr,
                                     onSubmit: (_) => ne.requestFocus()),
                               ),
                             ]),
@@ -1505,29 +2047,40 @@ class _Signup extends State<SignupPage> {
                             field(e, tr('Phone'), Icons.phone_android,
                                 node: ne,
                                 action: TextInputAction.next,
+                                error: _eErr,
                                 onSubmit: (_) => nem.requestFocus(),
                                 keyboard: TextInputType.phone),
                             const SizedBox(height: 14),
                             field(em, tr('Email'), Icons.mail_outline,
                                 node: nem,
                                 action: TextInputAction.next,
+                                error: _emErr,
                                 onSubmit: (_) => npw.requestFocus(),
                                 keyboard: TextInputType.emailAddress),
                             const SizedBox(height: 14),
                             field(p, tr('Password'), Icons.lock_outline,
                                 node: npw,
                                 action: TextInputAction.next,
+                                error: _pErr,
                                 onSubmit: (_) => ncp.requestFocus(),
                                 s: !show,
-                                trailing: eye()),
+                                trailing: eye(
+                                  visible: show,
+                                  onToggle: (v) => setState(() => show = v),
+                                )),
                             const SizedBox(height: 14),
                             field(
                                 cp, tr('Confirm password'), Icons.lock_outline,
                                 node: ncp,
                                 action: TextInputAction.done,
+                                error: _cpErr,
                                 onSubmit: (_) => go(),
-                                s: !show,
-                                trailing: eye()),
+                                s: !showConfirm,
+                                trailing: eye(
+                                  visible: showConfirm,
+                                  onToggle: (v) =>
+                                      setState(() => showConfirm = v),
+                                )),
                             const SizedBox(height: 24),
                             // Gradient primary button — same as Sign In.
                             SizedBox(
@@ -1582,7 +2135,8 @@ class _Signup extends State<SignupPage> {
                               const SizedBox(height: 20),
                               SocialButtons(
                                   onLogin: widget.success,
-                                  googleLogin: widget.p.repo.googleLogin),
+                                  googleLogin: widget.p.repo.googleLogin,
+                                  telegramLogin: widget.p.repo.telegramLogin),
                             ],
                             const SizedBox(height: 10),
                             TextButton(
@@ -2415,20 +2969,32 @@ class _Cart extends State<CartPage> {
         context, MaterialPageRoute(builder: (_) => const AddressPage()));
     if (a == null || !mounted) return;
     // Do not create the order or clear the cart until the shopper has seen
-    // the exact total and the QR(s) for the vendor(s) being paid.
+    // the exact total and the QR(s) for the vendor(s) being paid AND the
+    // payment has been verified by the provider (Bakong) on the backend.
+    // The reference doubles as the cloud order id, which makes the
+    // verified-order RPC idempotent (no duplicate orders on double taps).
     final reference = DateTime.now().millisecondsSinceEpoch.toString();
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       builder: (_) => _VendorPaymentSheet(
         items: widget.cart.items,
         total: widget.cart.grandTotal,
         tax: widget.cart.tax,
         reference: reference,
+        address: '${a.address}, ${a.city}, ${a.country}',
+        owner: widget.owner,
       ),
     );
     if (confirmed != true || !mounted) return;
-    widget.orders.create(widget.cart.items, widget.cart.grandTotal, a,
+    // The sheet returns true ONLY after the backend RPC created the order
+    // (payment verified server-side). Record the verified order locally so
+    // it appears in Order History even before the next cloud refresh.
+    await widget.orders.createVerified(widget.cart.items, widget.cart.grandTotal,
+        a,
+        id: reference,
         owner: widget.owner);
     widget.cart.clear();
     await showDialog(
@@ -2782,49 +3348,185 @@ class _Cart extends State<CartPage> {
 
 /// Checkout confirmation for QR payments. A cart can contain products from
 /// multiple vendors, so each vendor receives a separate exact amount.
-class _VendorPaymentSheet extends StatelessWidget {
+///
+/// PAYMENT VERIFICATION (KHQR / Bakong):
+///  * When the sheet opens it registers every vendor share as a PENDING
+///    payment row in the cloud (never as paid).
+///  * A timer re-checks the payment status server-side every few seconds.
+///    Only the Bakong Open API answer can flip a share to VERIFIED —
+///    opening/scanning the QR here does nothing on its own.
+///  * The "I have paid — place order" button stays DISABLED until every
+///    share is VERIFIED. A disabled tap shows
+///    "Please complete the payment before placing your order."
+///  * Placing the order goes through the backend RPC which re-verifies the
+///    payment again server-side (the button state alone is never trusted)
+///    and is idempotent per reference, so repeated taps cannot duplicate
+///    the order.
+class _VendorPaymentSheet extends StatefulWidget {
   final List<CartItem> items;
   final double total;
   final double tax;
   final String reference;
+  final String owner;
+
+  /// Delivery address captured before the sheet opened — handed to the
+  /// verified-order RPC when the shopper taps the button.
+  final String address;
   const _VendorPaymentSheet({
     required this.items,
     required this.total,
     required this.tax,
     required this.reference,
+    required this.address,
+    this.owner = '',
   });
+  @override
+  State<_VendorPaymentSheet> createState() => _VendorPaymentSheetState();
+}
 
-  Map<String, double> get _vendorAmounts {
+class _VendorPaymentSheetState extends State<_VendorPaymentSheet> {
+  /// Vendor → (amount, qr payload, md5) — built once from the cart.
+  late final Map<String, ({double amount, String payload})> _shares;
+
+  /// Vendor → VERIFIED? Mirrors the cloud `payments` rows.
+  final Map<String, bool> _verified = {};
+
+  bool _registered = false; // PENDING rows saved to the cloud
+  bool _checking = false; // a status re-check is running
+  bool _placing = false; // verified order RPC is running
+  String? _error; // last verification/placement error
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
     final subtotals = <String, double>{};
-    for (final item in items) {
+    for (final item in widget.items) {
       final vendor = item.product.vendorUsername.trim().isEmpty
           ? 'store'
           : item.product.vendorUsername.trim();
       subtotals[vendor] = (subtotals[vendor] ?? 0) + item.subtotal;
     }
     final subtotal = subtotals.values.fold<double>(0, (a, b) => a + b);
-    return {
+    _shares = {
       for (final entry in subtotals.entries)
-        entry.key: entry.value + (subtotal == 0 ? 0 : tax * entry.value / subtotal),
+        entry.key: (
+          amount: entry.value +
+              (subtotal == 0 ? 0 : widget.tax * entry.value / subtotal),
+          payload: _paymentData(entry.key,
+              entry.value + (subtotal == 0 ? 0 : widget.tax * entry.value / subtotal)),
+        ),
     };
+    _start();
   }
 
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  /// QR payload for a vendor share: the vendor's stored bank/KHQR code when
+  /// it has one, otherwise a self-describing demo payload carrying vendor,
+  /// amount and the immutable order reference.
   String _paymentData(String vendor, double amount) {
-    final code = items
+    final code = widget.items
         .where((item) =>
-            (item.product.vendorUsername.trim().isEmpty ? 'store' : item.product.vendorUsername.trim()) == vendor)
+            (item.product.vendorUsername.trim().isEmpty
+                ? 'store'
+                : item.product.vendorUsername.trim()) ==
+            vendor)
         .map((item) => item.product.vendorPaymentCode.trim())
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    // Vendors can store a bank/KHQR payload. The fallback remains useful for
-    // demo vendors: it identifies vendor, amount and immutable order reference.
     return code.isNotEmpty
         ? code
-        : 'online-shop-payment://pay?vendor=${Uri.encodeComponent(vendor)}&amount=${amount.toStringAsFixed(2)}&reference=$reference';
+        : 'online-shop-payment://pay?vendor=${Uri.encodeComponent(vendor)}&amount=${amount.toStringAsFixed(2)}&reference=${widget.reference}';
+  }
+
+  Future<void> _start() async {
+    // 1. Register PENDING rows (one per vendor share) in the cloud. This
+    //    only creates the payment records to be verified — it is NOT a
+    //    confirmation of payment in any way.
+    _registered = await SupabaseService.instance.registerPayments(
+      widget.reference,
+      [
+        for (final e in _shares.entries)
+          {
+            'reference': widget.reference,
+            'vendor': e.key,
+            'amount': e.value.amount,
+            'currency': 'USD',
+            'qr_md5': SupabaseService.qrMd5(e.value.payload),
+            'qr_payload': e.value.payload,
+            'status': 'PENDING',
+          }
+      ],
+    );
+    if (mounted) setState(() {});
+    await _check();
+    if (mounted) {
+      _poll = Timer.periodic(const Duration(seconds: 5), (_) => _check());
+    }
+  }
+
+  /// Re-check the payment status server-side. True ONLY when every share
+  /// is VERIFIED afterwards. Failures leave everything unverified.
+  Future<bool> _check() async {
+    if (_checking || !mounted) return false;
+    _checking = true;
+    final verified =
+        await SupabaseService.instance.verifyPayment(widget.reference);
+    _checking = false;
+    if (!mounted) return verified;
+    setState(() {
+      if (verified) {
+        for (final v in _shares.keys) {
+          _verified[v] = true;
+        }
+        _error = null;
+      } else {
+        for (final v in _shares.keys) {
+          _verified[v] = false;
+        }
+      }
+    });
+    if (verified) _poll?.cancel();
+    return verified;
+  }
+
+  bool get _allVerified =>
+      _shares.isNotEmpty && _shares.keys.every((v) => _verified[v] == true);
+
+  /// "I have paid — place order". Only reachable when every share is
+  /// VERIFIED (the button is disabled otherwise). Asks the backend to
+  /// re-verify and create the order; idempotent per reference.
+  Future<void> _placeOrder() async {
+    if (_placing) return; // already running — no duplicate orders
+    setState(() {
+      _placing = true;
+      _error = null;
+    });
+    final orderId = await SupabaseService.instance.createVerifiedOrder(
+      reference: widget.reference,
+      owner: widget.owner,
+      total: widget.total,
+      address: widget.address,
+      itemsJson: jsonEncode(SupabaseService.orderItemsJson(widget.items)),
+    );
+    if (!mounted) return;
+    setState(() => _placing = false);
+    if (orderId == null) {
+      // Backend refused (payment not verified server-side, cloud down, or
+      // the RPC rejected the order). The order was NOT created.
+      setState(() => _error =
+          'Please complete the payment before placing your order.');
+      return;
+    }
+    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final amounts = _vendorAmounts;
     final sch = Theme.of(context).colorScheme;
     return SafeArea(
       child: DraggableScrollableSheet(
@@ -2850,12 +3552,12 @@ class _VendorPaymentSheet extends StatelessWidget {
                 style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text('Amount to pay', style: TextStyle(color: sch.onSurfaceVariant)),
-            Text('\$${total.toStringAsFixed(2)}',
+            Text('\$${widget.total.toStringAsFixed(2)}',
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: sch.primary)),
             const SizedBox(height: 8),
-            Text('Reference: $reference', style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
+            Text('Reference: ${widget.reference}', style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
             const SizedBox(height: 18),
-            for (final entry in amounts.entries) ...[
+            for (final entry in _shares.entries) ...[
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -2867,36 +3569,96 @@ class _VendorPaymentSheet extends StatelessWidget {
                     Text(entry.key == 'store' ? 'Store payment' : 'Pay vendor @${entry.key}',
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
-                    Text('\$${entry.value.toStringAsFixed(2)}',
+                    Text('\$${entry.value.amount.toStringAsFixed(2)}',
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: sch.primary)),
                     const SizedBox(height: 12),
                     QrImageView(
-                      data: _paymentData(entry.key, entry.value),
+                      data: entry.value.payload,
                       version: QrVersions.auto,
                       size: 190,
                       backgroundColor: Colors.white,
                     ),
                     const SizedBox(height: 8),
-                    Text('Scan this QR in your payment app, then confirm payment.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: sch.onSurfaceVariant)),
+                    _statusChip(sch, entry.key),
                   ]),
                 ),
               ),
               const SizedBox(height: 12),
             ],
+            if (_error != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: sch.errorContainer.withValues(alpha: .5),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Row(children: [
+                  Icon(Icons.error_outline, color: sch.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(_error!,
+                          style: TextStyle(color: sch.onErrorContainer))),
+                ]),
+              ),
+              const SizedBox(height: 8),
+            ],
             FilledButton.icon(
-              onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.verified_outlined),
-              label: const Text('I have paid — place order'),
+              // DISABLED until every vendor share is VERIFIED by the payment
+              // provider (checked server-side). A disabled tap does nothing.
+              onPressed: _allVerified && !_placing ? _placeOrder : null,
+              icon: _placing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.verified_outlined),
+              label: Text(_placing
+                  ? 'Verifying payment...'
+                  : 'I have paid — place order'),
             ),
+            if (!_allVerified) ...[
+              const SizedBox(height: 8),
+              Text('Waiting for payment confirmation... The button enables '
+                  'automatically once your payment is verified.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12, color: sch.onSurfaceVariant)),
+            ],
             const SizedBox(height: 8),
             TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: _placing ? null : () => Navigator.pop(context, false),
                 child: const Text('Cancel')),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _statusChip(ColorScheme sch, String vendor) {
+    final verified = _verified[vendor] == true;
+    final checking = !_registered || _checking;
+    final color = verified ? Colors.green : checking ? Colors.orange : sch.error;
+    final icon = verified
+        ? Icons.verified_outlined
+        : checking
+            ? Icons.hourglass_top
+            : Icons.hourglass_empty;
+    final label = verified
+        ? 'Payment verified'
+        : checking
+            ? 'Checking payment...'
+            : 'Payment not received yet';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w700, color: color)),
+      ]),
     );
   }
 }
@@ -4456,6 +5218,15 @@ class _Settings extends State<SettingsPage> {
                 : l.t('Not configured')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _configureGoogle(c, l),
+          ),
+          ListTile(
+            leading: const Icon(Icons.send, color: Color(0xFF2AABEE)),
+            title: Text(l.t('Telegram Sign-In')),
+            subtitle: Text(TelegramAuthService.isConfigured
+                ? '@${TelegramAuthService.botUsername}'
+                : l.t('Not configured')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showTelegramSetup(c),
           ),
           const Divider(),
           ListTile(

@@ -11,22 +11,28 @@ import 'app_settings.dart';
 /// user is ever created.
 ///
 /// To make it work you need a Telegram bot: talk to @BotFather → /newbot and
-/// put the bot's username below. Real bot usernames MUST end with "bot"
-/// (Telegram rule) — a personal username like `Lin_Sreymao` will not work.
+/// put the bot's username in Settings → Telegram Sign-In (or set it as the
+/// default below). Real bot usernames MUST end with "bot" (Telegram rule) —
+/// a personal username like `Lin_Sreymao` will not work.
 class TelegramAuthService {
-  static const String defaultBotUsername = 'Lin_Sreymao';
+  /// Built-in fallback. Empty by default: a personal account can never be
+  /// used here, so the app starts unconfigured and shows the setup dialog
+  /// instead of a login widget that can never load.
+  static const String defaultBotUsername = '';
 
   /// The effective bot username: the one configured in-app (Settings →
-  /// Telegram) wins, otherwise the built-in default is used.
+  /// Telegram Sign-In) wins, otherwise the built-in default is used.
   static String get botUsername {
     final custom = AppSettings.telegramBotUsername.trim();
     return custom.isNotEmpty ? custom : defaultBotUsername;
   }
 
-  static bool get isConfigured {
-    final u = botUsername;
-    return u.isNotEmpty && u != 'YourTelegramBot';
-  }
+  static bool get isConfigured => botUsername.trim().isNotEmpty;
+
+  /// Origin that must be registered as the bot's Allowed URL in @BotFather
+  /// (Login Widget). Telegram only shows the confirm step when the login page
+  /// is opened from this origin — an arbitrary local page never confirms.
+  static String get allowedOrigin => AppSettings.telegramAllowedOrigin.trim();
 
   /// True when the current bot name ends with "bot" as Telegram requires.
   static bool botLooksValid(String username) {
@@ -144,6 +150,26 @@ class TelegramAuthService {
         image: m['photo_url']?.toString(),
         token: m['hash']?.toString(),
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Decodes the `#tgAuthResult=` fragment Telegram redirects to after the
+  /// user confirms in the Telegram app (redirect flow). The value is the
+  /// widget's usual JSON payload, base64url-encoded.
+  static User? userFromTgAuthResult(String fragment) {
+    const key = 'tgAuthResult=';
+    final i = fragment.indexOf(key);
+    if (i < 0) return null;
+    var v = fragment.substring(i + key.length);
+    final q = v.indexOf('#');
+    if (q >= 0) v = v.substring(0, q);
+    final b = v.trim().replaceAll('-', '+').replaceAll('_', '/');
+    if (b.isEmpty) return null;
+    final pad = b.length % 4 == 0 ? '' : '=' * (4 - b.length % 4);
+    try {
+      return userFromJson(utf8.decode(base64Url.decode(b + pad)));
     } catch (_) {
       return null;
     }

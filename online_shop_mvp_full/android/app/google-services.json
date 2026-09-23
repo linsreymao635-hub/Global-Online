@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "927736378028",
+    "project_id": "global-online-1870f",
+    "storage_bucket": "global-online-1870f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:927736378028:android:33e9fb10b989d535bb6509",
+        "android_client_info": {
+          "package_name": "com.example.online_shop_mvp_full"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "927736378028-f7q6mtdmvboc6kifbcnea0bhsooj88ag.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALjBmh981btKaGUuMply6uIL0RKoREiEI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "927736378028-f7q6mtdmvboc6kifbcnea0bhsooj88ag.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

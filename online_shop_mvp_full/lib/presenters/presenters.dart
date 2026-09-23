@@ -13,6 +13,11 @@ class LoginPresenter {
   }
 
   Future<User?> googleLogin() => repo.googleLogin();
+
+  /// Register the Telegram account returned by the Login Widget in the shared
+  /// cloud directory (provider: 'telegram') so it is a real account, not a
+  /// guest. Mirrors [googleLogin].
+  Future<User?> telegramLogin(User u) => repo.telegramLogin(u);
 }
 
 class SignupPresenter {
@@ -212,6 +217,29 @@ class OrderPresenter {
     // authority for existence (a later "missing" read means the admin
     // deleted it) while keeping working offline orders purely local.
     if (ok) await AppSettings.markOrderSynced(order.id);
+  }
+
+  /// Record a payment-verified order that the BACKEND already created
+  /// (via `create_verified_order`). No second cloud write happens here —
+  /// the id is the checkout reference, which the RPC used as the order id,
+  /// so this only mirrors the cloud row into the local list/cache.
+  Future<void> createVerified(List<CartItem> items, double total, Address a,
+      {required String id, String owner = ''}) async {
+    // Already loaded by the RPC path (e.g. hot-restart race) — nothing to do.
+    if (orders.any((o) => o.id == id)) return;
+    final order = Order(
+        id: id,
+        date: DateTime.now(),
+        items: items
+            .map((x) => CartItem(product: x.product, quantity: x.quantity))
+            .toList(),
+        total: total,
+        status: 'Processing',
+        deliveryAddress: '${a.address}, ${a.city}, ${a.country}',
+        owner: owner);
+    orders.insert(0, order);
+    await AppSettings.saveAllOrders(orders);
+    await AppSettings.markOrderSynced(order.id);
   }
 
   /// Update the status of an order (used by the Admin panel) — locally and

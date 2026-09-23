@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:online_shop_mvp_full/models/models.dart';
 import 'package:online_shop_mvp_full/services/telegram_auth_service.dart';
@@ -21,5 +23,35 @@ void main() {
   });
   test('telegram auth invalid json returns null', () {
     expect(TelegramAuthService.userFromJson('nope'), isNull);
+  });
+
+  test('telegram auth decodes tgAuthResult redirect payload', () {
+    // Same payload as above, base64url-encoded (no padding needed here).
+    const payload =
+        '{"id":777,"first_name":"Mao","last_name":"Lin","username":"linmao",'
+        '"photo_url":"https://t.me/i.jpg","auth_date":1700000001,"hash":"f00d"}';
+    final encoded = base64Url.encode(utf8.encode(payload)).replaceAll('=', '');
+    final u = TelegramAuthService.userFromTgAuthResult('#tgAuthResult=$encoded');
+    expect(u, isNotNull);
+    expect(u!.id, 777);
+    expect(u.firstName, 'Mao');
+    expect(u.lastName, 'Lin');
+    expect(u.username, 'linmao');
+    expect(u.image, 'https://t.me/i.jpg');
+    expect(u.token, 'f00d');
+  });
+
+  test('telegram auth tgAuthResult tolerates padding and query form', () {
+    const payload = '{"id":5,"first_name":"A"}';
+    final encoded = base64Url.encode(utf8.encode(payload));
+    // Query-style fragment (no leading #) with padding kept.
+    final u = TelegramAuthService.userFromTgAuthResult('tgAuthResult=$encoded');
+    expect(u, isNotNull);
+    expect(u!.username, 'telegram_5');
+  });
+
+  test('telegram auth tgAuthResult junk returns null', () {
+    expect(TelegramAuthService.userFromTgAuthResult('#tgAuthResult=!!!'), isNull);
+    expect(TelegramAuthService.userFromTgAuthResult('#other=1'), isNull);
   });
 }

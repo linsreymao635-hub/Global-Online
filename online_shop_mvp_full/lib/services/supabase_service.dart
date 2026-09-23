@@ -483,33 +483,121 @@ class SupabaseService {
     }
   }
 
+  /// Canonical JSON structure of an order's items, shared by [saveOrder] and
+  /// the verified-order RPC so both write exactly the same shape.
+  static List<Map<String, dynamic>> orderItemsJson(List<CartItem> items) =>
+      items
+          .map((it) => {
+                'quantity': it.quantity,
+                'product': {
+                  'id': it.product.id,
+                  'title': it.product.title,
+                  'price': it.product.price,
+                  'discountPercentage': it.product.discountPercentage,
+                  'rating': it.product.rating,
+                  'stock': it.product.stock,
+                  'brand': it.product.brand,
+                  'category': it.product.category,
+                  'description': it.product.description,
+                  'thumbnail': it.product.thumbnail,
+                  'images': it.product.images,
+                  'vendorUsername': it.product.vendorUsername,
+                  'vendorPaymentCode': it.product.vendorPaymentCode,
+                }
+              })
+          .toList();
+
   Future<bool> saveOrder(Order o) => _insert('orders', {
         'id': o.id,
         'owner': o.owner,
         'status': o.status,
         'total': o.total,
         'address': o.deliveryAddress,
-        'items': jsonEncode(o.items
-            .map((it) => {
-                  'quantity': it.quantity,
-                  'product': {
-                    'id': it.product.id,
-                    'title': it.product.title,
-                    'price': it.product.price,
-                    'discountPercentage': it.product.discountPercentage,
-                    'rating': it.product.rating,
-                    'stock': it.product.stock,
-                    'brand': it.product.brand,
-                    'category': it.product.category,
-                    'description': it.product.description,
-                    'thumbnail': it.product.thumbnail,
-                    'images': it.product.images,
-                    'vendorUsername': it.product.vendorUsername,
-                    'vendorPaymentCode': it.product.vendorPaymentCode,
-                  }
-                })
-            .toList()),
+        'items': jsonEncode(orderItemsJson(o.items)),
       });
+
+  // --------------------------------------------------------------- payments
+  //
+  // Payment verification (KHQR / Bakong). The rules:
+  //  * Opening the QR sheet registers PENDING payment rows — it never
+  //    verifies anything.
+  //  * Only the Bakong Open API answer (asked server-side by the SQL
+  //    functions in supabase_payments.sql) can flip a row to VERIFIED.
+  //  * Orders are created ONLY through [createVerifiedOrder], which
+  //    re-checks every payment server-side and is idempotent per
+  //    reference, so double-clicks can never duplicate an order.
+  //  * Fail closed: when the cloud or the provider cannot be reached,
+  //    everything reports NOT verified.
+
+  /// MD5 of the exact QR payload — the hash Bakong's
+  /// check_transaction_by_md5 API is queried with.
+  static String qrMd5(String payload) =>
+      crypto.md5.convert(utf8.encode(payload)).toString();
+
+  /// Register the PENDING payment shares of a checkout reference (one row
+  /// per vendor). Called when the QR payment sheet opens. Idempotent.
+  Future<bool> registerPayments(
+      String reference, List<Map<String, dynamic>> shares) async {
+    if (_inFlutterTest) return false;
+    try {
+      await client
+          .from('payments')
+          .upsert(shares, onConflict: 'reference,vendor');
+      _failed = false;
+      return true;
+    } catch (_) {
+      _failed = true;
+      return false;
+    }
+  }
+
+  /// Raw payment rows for a checkout reference: status per vendor share.
+  Future<List<Map<String, dynamic>>> paymentsFor(String reference) =>
+      _select('payments', eqColumn: 'reference', eqValue: reference);
+
+  /// Ask the backend to re-check every PENDING share of this reference with
+  /// Bakong right now. True ONLY when every share is VERIFIED afterwards.
+  Future<bool> verifyPayment(String reference) async {
+    if (_inFlutterTest) return false; // fail closed in tests
+    try {
+      final res = await client
+          .rpc('verify_payment', params: {'p_reference': reference}) as bool?;
+      _failed = false;
+      return res == true;
+    } catch (_) {
+      _failed = true;
+      return false;
+    }
+  }
+
+  /// Create the order through the backend-enforced payment check
+  /// (`create_verified_order` in supabase_payments.sql). The server
+  /// re-verifies every payment with Bakong and refuses unverified orders —
+  /// the client button state is never trusted on its own. Idempotent per
+  /// reference: returns the SAME order id when the order already exists.
+  /// Returns null when the payment is not verified / cloud unreachable.
+  Future<String?> createVerifiedOrder(
+      {required String reference,
+      required String owner,
+      required double total,
+      required String address,
+      required String itemsJson}) async {
+    if (_inFlutterTest) return null; // fail closed in tests
+    try {
+      final res = await client.rpc('create_verified_order', params: {
+        'p_reference': reference,
+        'p_owner': owner,
+        'p_total': total,
+        'p_address': address,
+        'p_items': itemsJson,
+      });
+      _failed = false;
+      return res?.toString();
+    } catch (_) {
+      _failed = true;
+      return null;
+    }
+  }
 
   static const orderStatuses = {
     'Processing',

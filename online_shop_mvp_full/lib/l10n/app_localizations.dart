@@ -138,6 +138,25 @@ class AppLocalizations {
     'Create Account': 'បង្កើតគណនី',
     'Continue as guest': 'បន្តជាភ្ញៀវ',
     'Login failed': 'ការចូលបរាជ័យ',
+    'Incorrect phone/email or password.':
+        'លេខទូរស័ព្ទ/ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។',
+    'Please enter your phone number or username':
+        'សូមបញ្ចូលលេខទូរស័ព្ទ ឬឈ្មោះអ្នកប្រើ',
+    'Please enter your password': 'សូមបញ្ចូលពាក្យសម្ងាត់',
+    'This field is required': 'ត្រូវបំពេញជំហាននេះ',
+    'Unable to connect to the server. Please check your internet connection and try again.':
+        'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនបម្រើបានទេ។ សូមពិនិត្យអ៊ីនធឺណិតរបស់អ្នកហើយព្យាយាមម្តងទៀត។',
+    'Google Sign-In is currently unavailable. Please try again.':
+        'Google Sign-In មិនអាចប្រើបានទេ។ សូមព្យាយាមម្តងទៀត។',
+    'Google Sign-In needs one more setup step: open https://console.cloud.google.com/apis/credentials, select your OAuth 2.0 Client ID, and under "Authorized JavaScript origins" add the exact address shown in this browser\'s address bar (including the port). Then reload this page and try again.':
+        'Google Sign-In ត្រូវការដំណើរការបន្ថែមមួយជំហាន៖ បើក https://console.cloud.google.com/apis/credentials រួមជ្រើសរើស OAuth 2.0 Client ID របស់អ្នក ហើយក្រោម "Authorized JavaScript origins" សូមបន្ថែមអាសយដ្ឋានដែលបង្ហាញនៅរបារអាសយដ្ឋានកម្មវិធីរុករករបស់អ្នក (រួមទាំង port)។ បន្ទាប់មកផ្ទុកទំព័រនេះឡើងវិញ ហើយព្យាយាមម្តងទៀត។',
+    'Telegram sign-in was cancelled. Continuing as guest.':
+        'ការចូលតាម Telegram ត្រូវបានបោះបង់។ បន្តជាភ្ញៀវ។',
+    'Please enter the 6-digit code': 'សូមបញ្ចូលកូដ ៦ ខ្ទង់',
+    'Google Sign-In setup incomplete: this app is not registered with Google. In console.cloud.google.com → APIs & Services → Credentials, create an OAuth client ID of type "Android" with package name com.example.online_shop_mvp_full and SHA-1 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2 (debug keystore), in the SAME project as your Web client. Save, wait a few minutes, then rebuild and run the app again.':
+        'Google Sign-In មិនទាន់ដំឡើងរួចរាល់ទេ៖ កម្មវិធីនេះមិនទាន់ចុះបញ្ជីជាមួយ Google ទេ។ នៅ console.cloud.google.com → APIs & Services → Credentials សូមបង្កើត OAuth client ID ប្រភេទ "Android" ដោយប្រើ package name com.example.online_shop_mvp_full និង SHA-1 4E:5C:2B:40:E8:FD:72:97:C6:DE:01:3E:37:07:00:1B:B4:CB:04:B2 (debug keystore) ក្នុង project ដូចគ្នានឹង Web client របស់អ្នក។ រក្សាទុក រង់ចាំប៉ុន្មាននាទី បន្ទាប់មក build ហើយ chạy កម្មវិធីឡើងវិញ។',
+    'A new code was sent': 'កូដថ្មីត្រូវបានផ្ញើ',
+    'Resend code in': 'ផ្ញើកូដម្តងទៀតក្នុង %d វិនាទី',
     'Sign Up': 'ចុះឈ្មោះ',
     'Forgot Password?': 'ភ្លេចពាក្យសម្ងាត់?',
     'Forgot Password': 'ភ្លេចពាក្យសម្ងាត់',
@@ -194,8 +213,36 @@ class AppLocalizations {
     'Fix username': 'កែឈ្មោះ',
     'Try anyway': 'ព្យាយាមដូចគ្នា',
     'Telegram bot username saved': 'ឈ្មោះ bot របស់ Telegram ត្រូវបានរក្សាទុក',
+    'One-time setup — then every user can log in with their own Telegram account:':
+        'ការកំណត់តែម្តងប៉ុណ្ណោះ — បន្ទាប់មកអ្នកប្រើប្រាស់ទាំងអស់អាចចូលដោយប្រើគណនី Telegram របស់ខ្លួនឯង៖',
+    '1. In Telegram, open @BotFather → /newbot → create a bot (its username must end with "bot").':
+        '១. ក្នុង Telegram បើក @BotFather → /newbot → បង្កើត bot (ឈ្មោះរបស់វាត្រូវតែបញ្ចប់ដោយ "bot") ។',
+    '2. Still in @BotFather, open your bot → Login Widget → add this exact Allowed URL:':
+        '២. នៅែក្នុង @BotFather ដូចគ្នា បើក bot របស់អ្នក → Login Widget → បន្ថែម Allowed URL ត្រឹមត្រូវដូចខាងក្រោម៖',
+    'Add a short link to your shop first (step 3) and paste it here':
+        'បង្កើតតំណខ្លីសម្រាប់ហាងរបស់អ្នកជាមុនសិន (ជំហាន ៣) រួចបិទភ្ជាប់វានៅទីនេះ',
+    '3. Create a free short link for your shop (for example on tinyurl.com) that opens this app, and paste it below:':
+        '៣. បង្កើតតំណខ្លីឥតគិតថ្លៃសម្រាប់ហាងរបស់អ្នក (ឧទាហរណ៍នៅ tinyurl.com) ដែលបើកកម្មវិធីនេះ រួចបិទភ្ជាប់វាខាងក្រោម៖',
+    'Allowed URL (link that opens this app)': 'Allowed URL (តំណដែលបើកកម្មវិធីនេះ)',
+    'Open @BotFather': 'បើក @BotFather',
+    'Waiting for Telegram to confirm…': 'កំពុងរង់ចាំ Telegram បញ្ជាក់…',
+    'If nothing opens in Telegram, the bot\'s Login Widget has no Allowed URL yet. Add this app\'s link as the Allowed URL in @BotFather, then try again.':
+        'ប្រសិនបើគ្មានអ្វីបើកនៅក្នុង Telegram ទេ ដល bot របស់អ្នកមិនទាន់មាន Allowed URL នៅឡើយទេ។ សូមបន្ថែមតំណរបស់កម្មវិធីនេះជា Allowed URL នៅក្នុង @BotFather រួចព្យាយាមម្តងទៀត។',
+    'Open setup': 'បើកការកំណត់',
+    'Setup': 'ការកំណត់',
+    'Telegram sign-in was cancelled.': 'ការចូលតាម Telegram ត្រូវបានបោះបង់។',
+    'Google Sign-In setup': 'ការកំណត់ការចូលតាម Google',
+    'Debug SHA-1 (auto-detected for this device):': 'Debug SHA-1 (រកឃើញស្វ័យប្រវត្តិសម្រាប់ឧបករណ៍នេះ)៖',
+    'Open Google Cloud Console': 'បើក Google Cloud Console',
+    'Copy': 'ចម្លង',
     'Support': 'ជំនួយ',
     'Online': 'តាមអ៊ីនធឺណិត',
+    'Reply': 'ឆ្លើយតប',
+    'Forward': 'បញ្ជូនបន្ត',
+    'Forwarded': 'បានបញ្ជូនបន្ត',
+    'Stickers': 'ស្ទីកឺ',
+    'Remove reaction': 'លុបប្រតិកម្ម',
+    'You': 'អ្នក',
     'Type your message…': 'វាយសាររបស់អ្នក…',
     'Typing…': 'កំពុងវាយ…',
     'Send': 'ផ្ញើ',

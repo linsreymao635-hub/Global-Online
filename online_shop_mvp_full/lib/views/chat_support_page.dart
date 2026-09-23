@@ -26,15 +26,27 @@ class ChatMessage {
     this.url,
     this.secs = 0,
     this.thumb,
+    this.forwarded = false,
   });
 
   final bool fromUser;
-  final String type;
+  final String type; // 'text' | 'image' | 'video' | 'voice' | 'sticker'
   final String text;
   final String? path;
   final String? url;
   final int secs;
   final String? thumb;
+
+  /// Reply quote: who wrote the quoted message ([replyToFromUser]) plus a
+  /// one-line preview of it. Set when the message was sent as a reply.
+  bool replyToFromUser = false;
+  String? replyToText;
+
+  /// Emoji reaction sticker on this message (null = no reaction).
+  String? reaction;
+
+  /// True when this message was forwarded (re-sent from another message).
+  bool forwarded = false;
 
   /// Preferred source for playback: local file first, then network URL.
   String get mediaSource => path ?? url ?? '';
@@ -48,6 +60,10 @@ class ChatMessage {
         'text': text,
         if (url != null) 'url': url,
         if (secs > 0) 'secs': secs,
+        if (forwarded) 'forwarded': true,
+        if (reaction != null) 'reaction': reaction,
+        if (replyToText != null)
+          'replyTo': {'fromUser': replyToFromUser, 'text': replyToText},
       };
 
   /// Restored messages are always renderable: a media bubble whose local
@@ -56,14 +72,24 @@ class ChatMessage {
     final type = j['type']?.toString() ?? 'text';
     final url = j['url']?.toString();
     final text = j['text']?.toString() ?? '';
-    final renderable = type == 'text' || (url != null && url.isNotEmpty);
-    return ChatMessage(
+    // Stickers are pure text; other media needs a surviving remote URL.
+    final renderable =
+        type == 'text' || type == 'sticker' || (url != null && url.isNotEmpty);
+    final m = ChatMessage(
       fromUser: j['fromUser'] == true,
       type: renderable ? type : 'text',
       text: text,
       url: url,
       secs: (j['secs'] as num?)?.toInt() ?? 0,
     );
+    m.reaction = j['reaction']?.toString();
+    m.forwarded = j['forwarded'] == true;
+    final reply = (j['replyTo'] as Map?)?.cast<String, dynamic>();
+    if (reply != null) {
+      m.replyToFromUser = reply['fromUser'] == true;
+      m.replyToText = reply['text']?.toString() ?? '';
+    }
+    return m;
   }
 }
 
@@ -82,6 +108,9 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   final List<ChatMessage> _msgs = [];
+
+  // Message currently being replied to (quoted above the input bar).
+  ChatMessage? _replyTo;
 
   // The support "brain": understands the question, remembers the
   // conversation and varies its answers (created in initState, where the
@@ -268,7 +297,9 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     if (text.isEmpty) return;
     _input.clear();
     _focus.unfocus();
-    final m = ChatMessage(fromUser: true, type: 'text', text: text);
+    final m =
+        _withReply(ChatMessage(fromUser: true, type: 'text', text: text));
+    _replyTo = null;
     setState(() => _msgs.add(m));
     _remember(m);
     _scrollDown();
@@ -281,19 +312,20 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     if (img == null && vid == null) return;
     setState(() {
       if (img != null) {
-        final m = ChatMessage(
-            fromUser: true, type: 'image', path: img.path, text: _input.text.trim());
+        final m = _withReply(ChatMessage(
+            fromUser: true, type: 'image', path: img.path, text: _input.text.trim()));
         _msgs.add(m);
         _remember(m);
       }
       if (vid != null) {
-        final m = ChatMessage(
-            fromUser: true, type: 'video', path: vid.path, text: _input.text.trim());
+        final m = _withReply(ChatMessage(
+            fromUser: true, type: 'video', path: vid.path, text: _input.text.trim()));
         _msgs.add(m);
         _remember(m);
       }
       _pendingImage = null;
       _pendingVideo = null;
+      _replyTo = null;
       _input.clear();
     });
     _scrollDown();
@@ -333,12 +365,199 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
   }
 
   /// The most recent text the user typed — used by voice/media messages so
-  /// a spoken question still gets a real answer.
+  /// a spoken question still gets a real answer. Stickers are skipped so a
+  /// sticker send does not become the "question".
   String get _lastUserText {
     for (final m in _msgs.reversed) {
-      if (m.fromUser && m.text.trim().isNotEmpty) return m.text;
+      if (m.fromUser &&
+          m.type != 'sticker' &&
+          m.text.trim().isNotEmpty) {
+        return m.text;
+      }
     }
     return '';
+  }
+
+  // --------------------------------------------------------------------------
+  // Reply / Forward / Reactions / Stickers
+  // --------------------------------------------------------------------------
+  /// One-line preview of a message, used in reply quotes and the reply bar.
+  String _previewOf(ChatMessage m) {
+    switch (m.type) {
+      case 'image':
+        return '📷 Photo';
+      case 'video':
+        return '🎬 Video';
+      case 'voice':
+        return '🎙️ Voice message';
+      case 'sticker':
+        return m.text;
+      default:
+        final t = m.text.trim();
+        return t.length > 80 ? '${t.substring(0, 80)}…' : t;
+    }
+  }
+
+  /// Attach the pending reply quote to a message being sent.
+  ChatMessage _withReply(ChatMessage m) {
+    final r = _replyTo;
+    if (r != null) {
+      m.replyToFromUser = r.fromUser;
+      m.replyToText = _previewOf(r);
+    }
+    return m;
+  }
+
+  void _startReply(ChatMessage m) {
+    setState(() => _replyTo = m);
+    _focus.requestFocus();
+  }
+
+  void _cancelReply() => setState(() => _replyTo = null);
+
+  /// Re-send a message as a copy marked "Forwarded".
+  void _forwardMessage(ChatMessage m) {
+    final copy = ChatMessage(
+        fromUser: true,
+        type: m.type,
+        text: m.text,
+        path: m.path,
+        url: m.url,
+        secs: m.secs,
+        thumb: m.thumb,
+        forwarded: true);
+    setState(() {
+      _msgs.add(copy);
+      _replyTo = null;
+    });
+    _remember(copy);
+    _scrollDown();
+    _botReply(userText: m.type == 'text' ? m.text : null);
+  }
+
+  /// Toggle an emoji reaction on [m] (same emoji removes it). The whole
+  /// conversation is re-saved so the reaction survives a restart.
+  void _setReaction(ChatMessage m, String emoji) {
+    setState(() => m.reaction = m.reaction == emoji ? null : emoji);
+    unawaited(ChatStore.instance.saveAll(_msgs));
+  }
+
+  /// Long-press sheet: reaction stickers + Reply + Forward.
+  Future<void> _showMessageActions(ChatMessage m) async {
+    const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (bc) {
+        final tr = AppLocalizations.of(bc).t;
+        final sch = Theme.of(bc).colorScheme;
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(height: 12),
+            Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: sch.outlineVariant,
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 10),
+            // Reaction sticker row — tap to react, tap the same emoji again
+            // (or "Remove reaction") to take it back.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                for (final e in reactions)
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(bc);
+                      _setReaction(m, e);
+                    },
+                    child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(e,
+                            style: const TextStyle(fontSize: 28))),
+                  ),
+              ],
+            ),
+            const Divider(height: 16),
+            if (m.reaction != null)
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: Text(tr('Remove reaction')),
+                onTap: () {
+                  Navigator.pop(bc);
+                  _setReaction(m, m.reaction!);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.reply),
+              title: Text(tr('Reply')),
+              onTap: () {
+                Navigator.pop(bc);
+                _startReply(m);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.shortcut_outlined),
+              title: Text(tr('Forward')),
+              onTap: () {
+                Navigator.pop(bc);
+                _forwardMessage(m);
+              },
+            ),
+            const SizedBox(height: 8),
+          ]),
+        );
+      },
+    );
+  }
+
+  /// Sticker picker: tap a sticker to send it as its own big message.
+  void _showStickerSheet() {
+    const stickers = [
+      '😀', '😂', '🥰', '😍', '😎', '🤔', '😴', '😭',
+      '😡', '🤗', '🥳', '😇', '👍', '👎', '🙏', '👏',
+      '💪', '🤝', '✌️', '❤️', '💔', '✨', '🔥', '🎉',
+      '🎁', '🛒', '📦', '💳', '🚚', '⭐', '🤩', '🙌',
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (bc) => SafeArea(
+        child: SizedBox(
+          height: 280,
+          child: GridView.count(
+            crossAxisCount: 8,
+            padding: const EdgeInsets.all(12),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            children: [
+              for (final s in stickers)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(bc);
+                    _sendSticker(s);
+                  },
+                  child: Center(
+                      child: Text(s, style: const TextStyle(fontSize: 30))),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _sendSticker(String emoji) {
+    final m = _withReply(
+        ChatMessage(fromUser: true, type: 'sticker', text: emoji));
+    _replyTo = null;
+    setState(() => _msgs.add(m));
+    _remember(m);
+    _scrollDown();
+    _botReply(userText: emoji);
   }
 
   // --------------------------------------------------------------------------
@@ -609,6 +828,7 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
                 },
               ),
             ),
+            if (_replyTo != null) _replyPreview(sch, tr),
             if (_pendingImage != null || _pendingVideo != null)
               _pendingPreview(sch, tr),
             if (_recording) _recordingBar(sch, tr),
@@ -637,6 +857,12 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    // Stickers
+                    IconButton(
+                      tooltip: tr('Stickers'),
+                      onPressed: _showStickerSheet,
+                      icon: const Icon(Icons.mood_outlined),
+                    ),
                     // Attach (image / video / camera)
                     IconButton(
                       tooltip: tr('Attach'),
@@ -729,6 +955,50 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
           ],
         ),
       ),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Reply preview strip (quoted message above the input bar)
+  // --------------------------------------------------------------------------
+  Widget _replyPreview(ColorScheme sch, String Function(String) tr) {
+    final r = _replyTo!;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: sch.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: sch.primary, width: 3),
+          top: BorderSide(color: sch.outlineVariant),
+          right: BorderSide(color: sch.outlineVariant),
+          bottom: BorderSide(color: sch.outlineVariant),
+        ),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(r.fromUser ? tr('You') : tr('Support'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: sch.primary)),
+                Text(_previewOf(r),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12)),
+              ]),
+        ),
+        IconButton(
+          tooltip: tr('Cancel'),
+          onPressed: _cancelReply,
+          icon: const Icon(Icons.close, size: 18),
+        ),
+      ]),
     );
   }
 
@@ -854,6 +1124,72 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
     final bg = isUser ? sch.primary : sch.surfaceContainerHighest;
     final fg = isUser ? sch.onPrimary : sch.onSurface;
 
+    // Sticker messages render big, without the colored bubble.
+    if (m.type == 'sticker') {
+      return Align(
+        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onLongPress: () => _showMessageActions(m),
+          child: Column(
+            crossAxisAlignment:
+                isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.all(2),
+                child: Text(m.text, style: const TextStyle(fontSize: 46)),
+              ),
+              if (m.reaction != null) _reactionBadge(m, sch),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Quoted message this one replies to.
+    Widget? quote;
+    if (m.replyToText != null && m.replyToText!.isNotEmpty) {
+      quote = Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isUser
+              ? Colors.white.withValues(alpha: .18)
+              : sch.surface.withValues(alpha: .65),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: IntrinsicHeight(
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                width: 3,
+                decoration: BoxDecoration(
+                    color: isUser ? sch.onPrimary : sch.primary,
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(m.replyToFromUser ? tr('You') : tr('Support'),
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isUser ? sch.onPrimary : sch.primary)),
+                    Text(m.replyToText!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: fg.withValues(alpha: .85))),
+                  ]),
+            ),
+          ]),
+        ),
+      );
+    }
+
     Widget content;
     switch (m.type) {
       case 'image':
@@ -968,23 +1304,73 @@ class _ChatSupportPageState extends State<ChatSupportPage> {
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: EdgeInsets.symmetric(
-            horizontal: m.type == 'text' ? 14 : 6,
-            vertical: m.type == 'text' ? 10 : 6),
-        constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isUser ? 16 : 4),
-            bottomRight: Radius.circular(isUser ? 4 : 16),
-          ),
+      child: GestureDetector(
+        // Long-press any message for reactions / Reply / Forward.
+        onLongPress: () => _showMessageActions(m),
+        child: Column(
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: EdgeInsets.symmetric(
+                  horizontal: m.type == 'text' ? 14 : 6,
+                  vertical: m.type == 'text' ? 10 : 6),
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.78),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isUser ? 16 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 16),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (m.forwarded)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.shortcut,
+                            size: 12, color: fg.withValues(alpha: .8)),
+                        const SizedBox(width: 4),
+                        Text(tr('Forwarded'),
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: fg.withValues(alpha: .8))),
+                      ]),
+                    ),
+                  if (quote != null) quote,
+                  content,
+                ],
+              ),
+            ),
+            if (m.reaction != null) _reactionBadge(m, sch),
+          ],
         ),
-        child: content,
+      ),
+    );
+  }
+
+  /// Small tappable pill under a bubble showing its emoji reaction
+  /// (tap it to remove the reaction).
+  Widget _reactionBadge(ChatMessage m, ColorScheme sch) {
+    return GestureDetector(
+      onTap: () => _setReaction(m, m.reaction!),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+            color: sch.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: sch.outlineVariant)),
+        child: Text(m.reaction!, style: const TextStyle(fontSize: 13)),
       ),
     );
   }

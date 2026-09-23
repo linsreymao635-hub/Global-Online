@@ -67,13 +67,20 @@ class AppSettings {
       _googleAndroidClientId.trim().isNotEmpty;
 
   static const _telegramBotKey = 'telegram_bot_username';
+  static const _telegramOriginKey = 'telegram_allowed_origin';
   static const _feedbackKey = 'offboarding_feedback';
   static String _telegramBot = '';
+  static String _telegramOrigin = '';
 
   /// Telegram bot username used by the Login Widget (takes priority over the
   /// default in [TelegramAuthService]). Real bot names must end with "bot".
   static String get telegramBotUsername => _telegramBot;
   static bool get telegramConfigured => _telegramBot.trim().isNotEmpty;
+
+  /// Exact origin (e.g. `https://abc123.tinyurl.com`) registered as the
+  /// Allowed URL for the bot in @BotFather (Login Widget). Telegram shows the
+  /// confirm step only when the login page is served from this origin.
+  static String get telegramAllowedOrigin => _telegramOrigin;
 
   static Future<void> load() async {
     final p = await SharedPreferences.getInstance();
@@ -101,6 +108,7 @@ class AppSettings {
     _googleClientId = p.getString(_googleClientIdKey) ?? '';
     _googleAndroidClientId = p.getString(_googleAndroidClientIdKey) ?? '';
     _telegramBot = p.getString(_telegramBotKey) ?? '';
+    _telegramOrigin = p.getString(_telegramOriginKey) ?? '';
     _loadProfiles(p);
     final s = p.getString(_sessionKey);
     if (s != null) {
@@ -740,6 +748,12 @@ class AppSettings {
     _telegramBot = username.trim().replaceAll('@', '');
     final p = await SharedPreferences.getInstance();
     await p.setString(_telegramBotKey, _telegramBot);
+  }
+
+  static Future<void> saveTelegramAllowedOrigin(String origin) async {
+    _telegramOrigin = origin.trim();
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_telegramOriginKey, _telegramOrigin);
   }
 
   /// Append off-boarding feedback ("why are you leaving") so it can be
